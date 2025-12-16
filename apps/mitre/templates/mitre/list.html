@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}MITRE Framework - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">MITRE Framework</li>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">MITRE ATT&CK / ATLAS</h1>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Framework</label>
+                <select name="framework" class="form-select">
+                    <option value="">All</option>
+                    <option value="attack" {% if request.GET.framework == 'attack' %}selected{% endif %}>MITRE ATT&CK</option>
+                    <option value="atlas" {% if request.GET.framework == 'atlas' %}selected{% endif %}>MITRE ATLAS</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Tactic</label>
+                <select name="tactic" class="form-select">
+                    <option value="">All</option>
+                    {% for tactic in tactics %}
+                    <option value="{{ tactic.pk }}" {% if request.GET.tactic == tactic.pk|stringformat:"d" %}selected{% endif %}>{{ tactic.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-secondary">Filter</button>
+                <a href="{% url 'mitre:list' %}" class="btn btn-outline-secondary ms-2">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tactics Overview -->
+<div class="row mb-4">
+    {% for tactic in tactics %}
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <a href="{% url 'mitre:tactic_detail' tactic.tactic_id %}">{{ tactic.tactic_id }}</a>
+                </h6>
+            </div>
+            <div class="card-body">
+                <h5><a href="{% url 'mitre:tactic_detail' tactic.tactic_id %}" class="text-decoration-none">{{ tactic.name }}</a></h5>
+                <span class="badge bg-{% if tactic.framework == 'attack' %}primary{% else %}success{% endif %}">
+                    {{ tactic.get_framework_display }}
+                </span>
+                <span class="badge bg-secondary">{{ tactic.techniques.count }} techniques</span>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            No MITRE data loaded yet. Run <code>python manage.py seed_mitre</code> to load MITRE data.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Techniques Table -->
+{% if techniques %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Techniques</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Tactic</th>
+                    <th>Framework</th>
+                    <th>Findings</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for technique in techniques %}
+                <tr>
+                    <td>
+                        <a href="{{ technique.get_absolute_url }}">{{ technique.technique_id }}</a>
+                        {% if technique.is_subtechnique %}
+                        <span class="badge bg-light text-dark">sub</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ technique.name }}</td>
+                    <td>{{ technique.tactic.name }}</td>
+                    <td>
+                        <span class="badge bg-{% if technique.framework == 'attack' %}primary{% else %}success{% endif %}">
+                            {{ technique.get_framework_display }}
+                        </span>
+                    </td>
+                    <td>{{ technique.findings.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

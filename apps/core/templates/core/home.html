@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Threat Model Repository{% endblock %}
+
+{% block breadcrumb %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mb-4">Threat Model Repository</h1>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Threat Models</h5>
+                    <h2>{{ total_threat_models }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Published</h5>
+                    <h2>{{ published_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Drafts</h5>
+                    <h2>{{ draft_count }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Threat Models -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Threat Models</h5>
+                    <a href="{% url 'threatmodels:create' %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus"></i> New Threat Model
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_threat_models %}
+                    <div class="list-group list-group-flush">
+                        {% for tm in recent_threat_models %}
+                        <a href="{{ tm.get_absolute_url }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ tm.title }}</h6>
+                                <small>
+                                    <span class="badge status-{{ tm.status }}">{{ tm.get_status_display }}</span>
+                                    {% if tm.overall_risk %}
+                                    <span class="badge risk-badge-{{ tm.overall_risk }}">Risk: {{ tm.risk_label }}</span>
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <small class="text-muted">
+                                {{ tm.business_unit.name }} | Updated {{ tm.updated_at|timesince }} ago
+                            </small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">No threat models yet. <a href="{% url 'threatmodels:create' %}">Create one</a>.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Units -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Business Units</h5>
+                </div>
+                <div class="card-body">
+                    {% if business_units %}
+                    <ul class="list-unstyled mb-0">
+                        {% for bu in business_units %}
+                        <li class="mb-2">
+                            <a href="{{ bu.get_absolute_url }}">
+                                <i class="bi bi-building"></i> {{ bu.name }}
+                            </a>
+                            {% if bu.get_descendant_count %}
+                            <span class="badge bg-secondary">{{ bu.get_descendant_count }} sub-units</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">No business units defined yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

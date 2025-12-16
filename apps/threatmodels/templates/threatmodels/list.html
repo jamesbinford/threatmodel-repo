@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Threat Models - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">Threat Models</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Threat Models</h1>
+    <a href="{% url 'threatmodels:create' %}" class="btn btn-primary">
+        <i class="bi bi-plus"></i> New Threat Model
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">All</option>
+                    <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Draft</option>
+                    <option value="published" {% if request.GET.status == 'published' %}selected{% endif %}>Published</option>
+                    <option value="archived" {% if request.GET.status == 'archived' %}selected{% endif %}>Archived</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Risk Level</label>
+                <select name="risk" class="form-select">
+                    <option value="">All</option>
+                    {% for value, label in risk_choices %}
+                    <option value="{{ value }}" {% if request.GET.risk == value|stringformat:"d" %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-secondary">Filter</button>
+                <a href="{% url 'threatmodels:list' %}" class="btn btn-outline-secondary ms-2">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if threat_models %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Business Unit</th>
+                    <th>Status</th>
+                    <th>Risk</th>
+                    <th>Findings</th>
+                    <th>Owner</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tm in threat_models %}
+                <tr>
+                    <td>
+                        <a href="{{ tm.get_absolute_url }}">{{ tm.title }}</a>
+                    </td>
+                    <td>{{ tm.business_unit.name }}</td>
+                    <td><span class="badge status-{{ tm.status }}">{{ tm.get_status_display }}</span></td>
+                    <td>
+                        {% if tm.overall_risk %}
+                        <span class="badge risk-badge-{{ tm.overall_risk }}">{{ tm.risk_label }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ tm.findings.count }}</td>
+                    <td>{{ tm.owner.username }}</td>
+                    <td>{{ tm.updated_at|date:"M d, Y" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+        </li>
+        {% endif %}
+        <li class="page-item disabled">
+            <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        </li>
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="alert alert-info">
+    No threat models found. <a href="{% url 'threatmodels:create' %}">Create one</a>.
+</div>
+{% endif %}
+{% endblock %}

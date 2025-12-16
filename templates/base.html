@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Threat Model Repository{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --sidebar-width: 280px;
+        }
+
+        body {
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+            position: fixed;
+            top: 0;
+            left: 0;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 20px;
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+            background-color: #343a40;
+            color: white;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .sidebar-nav .nav-link {
+            color: #333;
+            padding: 0.5rem 1rem;
+        }
+
+        .sidebar-nav .nav-link:hover {
+            background-color: #e9ecef;
+        }
+
+        .sidebar-nav .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        .tree-item {
+            padding-left: 1rem;
+        }
+
+        .tree-toggle {
+            cursor: pointer;
+        }
+
+        .risk-badge-1 { background-color: #198754; }
+        .risk-badge-2 { background-color: #20c997; }
+        .risk-badge-3 { background-color: #ffc107; color: #000; }
+        .risk-badge-4 { background-color: #fd7e14; }
+        .risk-badge-5 { background-color: #dc3545; }
+
+        .status-draft { background-color: #6c757d; }
+        .status-published { background-color: #198754; }
+        .status-archived { background-color: #adb5bd; }
+
+        .breadcrumb-item + .breadcrumb-item::before {
+            content: ">";
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h5 class="mb-0">
+                <i class="bi bi-shield-check"></i> Threat Models
+            </h5>
+        </div>
+
+        <div class="sidebar-nav">
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">
+                        <i class="bi bi-house"></i> Home
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'threatmodels:list' %}">
+                        <i class="bi bi-file-text"></i> All Threat Models
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'organization:list' %}">
+                        <i class="bi bi-diagram-3"></i> Business Units
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'mitre:list' %}">
+                        <i class="bi bi-shield-exclamation"></i> MITRE Framework
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'reports:dashboard' %}">
+                        <i class="bi bi-graph-up"></i> Dashboard
+                    </a>
+                </li>
+            </ul>
+
+            <hr>
+
+            <!-- Business Unit Tree -->
+            <div class="px-3">
+                <h6 class="text-muted mb-2">
+                    <i class="bi bi-building"></i> Lines of Business
+                </h6>
+                <div id="business-unit-tree">
+                    {% block sidebar_tree %}
+                    <!-- Tree loaded via HTMX or populated by context processor -->
+                    {% endblock %}
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer p-3 border-top mt-auto">
+            {% if user.is_authenticated %}
+                <div class="dropdown">
+                    <a class="text-decoration-none dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle"></i> {{ user.username }}
+                    </a>
+                    <ul class="dropdown-menu">
+                        {% if user.is_staff %}
+                        <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% endif %}
+                        <li><a class="dropdown-item" href="{% url 'accounts:logout' %}">Logout</a></li>
+                    </ul>
+                </div>
+            {% else %}
+                <a href="{% url 'accounts:login' %}" class="btn btn-primary btn-sm w-100">
+                    <i class="bi bi-box-arrow-in-right"></i> Login
+                </a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Breadcrumb -->
+        {% block breadcrumb %}
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                {% block breadcrumb_items %}{% endblock %}
+            </ol>
+        </nav>
+        {% endblock %}
+
+        <!-- Messages -->
+        {% if messages %}
+        <div class="mb-3">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Page Content -->
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

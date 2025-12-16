@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}{{ technique.technique_id }} - {{ technique.name }} - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{% url 'mitre:list' %}">MITRE Framework</a></li>
+<li class="breadcrumb-item"><a href="{% url 'mitre:tactic_detail' technique.tactic.tactic_id %}">{{ technique.tactic.name }}</a></li>
+<li class="breadcrumb-item active">{{ technique.technique_id }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>{{ technique.technique_id }} - {{ technique.name }}</h1>
+    <div class="mt-2">
+        <span class="badge bg-{% if technique.framework == 'attack' %}primary{% else %}success{% endif %}">
+            {{ technique.get_framework_display }}
+        </span>
+        <a href="{{ technique.url }}" target="_blank" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-box-arrow-up-right"></i> View on MITRE
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Description -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Description</h5>
+            </div>
+            <div class="card-body">
+                <p>{{ technique.description }}</p>
+            </div>
+        </div>
+
+        <!-- Sub-techniques -->
+        {% if subtechniques %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Sub-techniques</h5>
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for sub in subtechniques %}
+                <li class="list-group-item">
+                    <a href="{{ sub.get_absolute_url }}">{{ sub.technique_id }}</a> - {{ sub.name }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Related Findings -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Related Findings ({{ findings|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if findings %}
+                <div class="list-group list-group-flush">
+                    {% for finding in findings %}
+                    <a href="{{ finding.threat_model.get_absolute_url }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ finding.threat_id }}: {{ finding.threat_object }}</h6>
+                            <small>
+                                <span class="badge risk-badge-{{ finding.inherent_risk }}">{{ finding.inherent_risk_label }}</span>
+                            </small>
+                        </div>
+                        <small class="text-muted">{{ finding.threat_model.title }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No findings reference this technique yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Info Card -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Details</h5>
+            </div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item">
+                    <strong>Tactic:</strong><br>
+                    <a href="{% url 'mitre:tactic_detail' technique.tactic.tactic_id %}">{{ technique.tactic.name }}</a>
+                </li>
+                <li class="list-group-item">
+                    <strong>Framework:</strong><br>
+                    {{ technique.get_framework_display }}
+                </li>
+                {% if technique.parent %}
+                <li class="list-group-item">
+                    <strong>Parent Technique:</strong><br>
+                    <a href="{{ technique.parent.get_absolute_url }}">{{ technique.parent.technique_id }} - {{ technique.parent.name }}</a>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

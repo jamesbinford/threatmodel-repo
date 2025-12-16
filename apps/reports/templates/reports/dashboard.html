@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Executive Dashboard - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Executive Dashboard</h1>
+    <a href="{% url 'reports:dashboard_pdf' %}" class="btn btn-outline-primary">
+        <i class="bi bi-file-pdf"></i> Export PDF
+    </a>
+</div>
+
+<!-- Summary Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h2>{{ total_threat_models }}</h2>
+                <p class="mb-0">Total Threat Models</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h2>{{ published_count }}</h2>
+                <p class="mb-0">Published</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h2>{{ total_findings }}</h2>
+                <p class="mb-0">Total Findings</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <h2>{{ high_risk_findings|length }}</h2>
+                <p class="mb-0">High Risk Unmitigated</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Risk Distribution Chart -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Risk Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="riskChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- STRIDE Distribution Chart -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">STRIDE Category Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="strideChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Risk by Business Unit -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Risk by Business Unit</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="buChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top MITRE Techniques -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Top MITRE Techniques</h5>
+            </div>
+            <div class="card-body">
+                {% if top_techniques %}
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Technique</th>
+                            <th>Name</th>
+                            <th>Findings</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for technique in top_techniques %}
+                        <tr>
+                            <td><a href="{{ technique.get_absolute_url }}">{{ technique.technique_id }}</a></td>
+                            <td>{{ technique.name|truncatechars:30 }}</td>
+                            <td>{{ technique.finding_count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No MITRE techniques linked to findings yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- High Risk Findings -->
+{% if high_risk_findings %}
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">High Risk Findings Requiring Mitigation</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Finding ID</th>
+                    <th>Threat Object</th>
+                    <th>Threat Model</th>
+                    <th>Inherent Risk</th>
+                    <th>Owner</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for finding in high_risk_findings %}
+                <tr>
+                    <td>{{ finding.threat_id }}</td>
+                    <td>{{ finding.threat_object }}</td>
+                    <td><a href="{{ finding.threat_model.get_absolute_url }}">{{ finding.threat_model.title }}</a></td>
+                    <td><span class="badge risk-badge-{{ finding.inherent_risk }}">{{ finding.inherent_risk_label }}</span></td>
+                    <td>{{ finding.owner }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Risk Distribution Chart
+    const riskData = {{ risk_distribution_json|safe }};
+    const riskLabels = {1: 'Very Low', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Critical'};
+    const riskColors = ['#198754', '#20c997', '#ffc107', '#fd7e14', '#dc3545'];
+
+    if (riskData.length > 0) {
+        new Chart(document.getElementById('riskChart'), {
+            type: 'doughnut',
+            data: {
+                labels: riskData.map(d => riskLabels[d.overall_risk]),
+                datasets: [{
+                    data: riskData.map(d => d.count),
+                    backgroundColor: riskData.map(d => riskColors[d.overall_risk - 1])
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    // STRIDE Distribution Chart
+    const strideData = {{ stride_distribution_json|safe }};
+    const strideLabels = {
+        'S': 'Spoofing', 'T': 'Tampering', 'R': 'Repudiation',
+        'I': 'Info Disclosure', 'D': 'DoS', 'E': 'Elevation'
+    };
+
+    if (strideData.length > 0) {
+        new Chart(document.getElementById('strideChart'), {
+            type: 'bar',
+            data: {
+                labels: strideData.map(d => strideLabels[d.stride_category]),
+                datasets: [{
+                    label: 'Findings',
+                    data: strideData.map(d => d.count),
+                    backgroundColor: '#0d6efd'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    // Business Unit Risk Chart
+    const buData = {{ bu_risk_json|safe }};
+
+    if (buData.length > 0) {
+        new Chart(document.getElementById('buChart'), {
+            type: 'bar',
+            data: {
+                labels: buData.map(d => d.name),
+                datasets: [{
+                    label: 'Threat Models',
+                    data: buData.map(d => d.threat_model_count),
+                    backgroundColor: '#0d6efd'
+                }, {
+                    label: 'Avg Risk',
+                    data: buData.map(d => d.avg_risk ? d.avg_risk.toFixed(1) : 0),
+                    backgroundColor: '#dc3545'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

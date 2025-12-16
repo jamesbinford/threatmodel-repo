@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}{{ threat_model.title }} - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{% url 'threatmodels:list' %}">Threat Models</a></li>
+<li class="breadcrumb-item active">{{ threat_model.title }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>{{ threat_model.title }}</h1>
+        <div class="mt-2">
+            <span class="badge status-{{ threat_model.status }}">{{ threat_model.get_status_display }}</span>
+            {% if threat_model.overall_risk %}
+            <span class="badge risk-badge-{{ threat_model.overall_risk }}">Risk: {{ threat_model.risk_label }}</span>
+            {% endif %}
+            <span class="badge bg-secondary">{{ threat_model.business_unit.name }}</span>
+        </div>
+    </div>
+    <div>
+        <a href="{% url 'threatmodels:edit' threat_model.slug %}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil"></i> Edit
+        </a>
+    </div>
+</div>
+
+<!-- Description -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Description</h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-0">{{ threat_model.description|linebreaks }}</p>
+    </div>
+    <div class="card-footer text-muted">
+        <small>Owner: {{ threat_model.owner.username }} | Created: {{ threat_model.created_at|date:"M d, Y" }} | Last updated: {{ threat_model.updated_at|date:"M d, Y H:i" }}</small>
+    </div>
+</div>
+
+<!-- Diagrams -->
+{% if diagrams %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Diagrams</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for diagram in diagrams %}
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <img src="{{ diagram.file.url }}" class="card-img-top" alt="{{ diagram.title }}">
+                    <div class="card-body">
+                        <h6 class="card-title">{{ diagram.title }}</h6>
+                        {% if diagram.description %}
+                        <p class="card-text small">{{ diagram.description }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Findings -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Findings ({{ findings|length }})</h5>
+        <a href="{% url 'threatmodels:finding_add' threat_model.slug %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus"></i> Add Finding
+        </a>
+    </div>
+    <div class="card-body">
+        {% if findings %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Threat Object</th>
+                        <th>STRIDE</th>
+                        <th>MITRE</th>
+                        <th>Likelihood</th>
+                        <th>Inherent Risk</th>
+                        <th>Residual Risk</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for finding in findings %}
+                    <tr>
+                        <td><strong>{{ finding.threat_id }}</strong></td>
+                        <td>{{ finding.threat_object }}</td>
+                        <td><span class="badge bg-info">{{ finding.stride_label }}</span></td>
+                        <td>
+                            {% if finding.mitre_technique %}
+                            <a href="{{ finding.mitre_technique.get_absolute_url }}">
+                                {{ finding.mitre_technique.technique_id }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ finding.get_threat_catalog_rating_display|default:"-" }}</td>
+                        <td><span class="badge risk-badge-{{ finding.inherent_risk }}">{{ finding.inherent_risk_label }}</span></td>
+                        <td>
+                            {% if finding.residual_risk %}
+                            <span class="badge risk-badge-{{ finding.residual_risk }}">{{ finding.residual_risk_label }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'threatmodels:finding_edit' threat_model.slug finding.pk %}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="8" class="bg-light">
+                            <strong>Scenario:</strong> {{ finding.scenario }}
+                            {% if finding.mitigations %}
+                            <br><strong>Mitigations:</strong> {{ finding.mitigations|linebreaks }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No findings yet. <a href="{% url 'threatmodels:finding_add' threat_model.slug %}">Add one</a>.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

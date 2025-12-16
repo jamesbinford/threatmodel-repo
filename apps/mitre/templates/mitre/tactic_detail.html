@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tactic.tactic_id }} - {{ tactic.name }} - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{% url 'mitre:list' %}">MITRE Framework</a></li>
+<li class="breadcrumb-item active">{{ tactic.name }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>{{ tactic.tactic_id }} - {{ tactic.name }}</h1>
+    <div class="mt-2">
+        <span class="badge bg-{% if tactic.framework == 'attack' %}primary{% else %}success{% endif %}">
+            {{ tactic.get_framework_display }}
+        </span>
+        <a href="{{ tactic.url }}" target="_blank" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-box-arrow-up-right"></i> View on MITRE
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Description</h5>
+    </div>
+    <div class="card-body">
+        <p>{{ tactic.description }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Techniques ({{ techniques|length }})</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Sub-techniques</th>
+                    <th>Findings</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for technique in techniques %}
+                <tr>
+                    <td><a href="{{ technique.get_absolute_url }}">{{ technique.technique_id }}</a></td>
+                    <td>{{ technique.name }}</td>
+                    <td>{{ technique.subtechniques.count }}</td>
+                    <td>{{ technique.findings.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

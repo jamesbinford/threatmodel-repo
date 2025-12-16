@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Business Units - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active">Business Units</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Business Units</h1>
+</div>
+
+{% if business_units %}
+<div class="card">
+    <div class="card-body">
+        {% load mptt_tags %}
+        <ul class="list-unstyled">
+            {% recursetree business_units %}
+            <li class="mb-2" style="margin-left: {{ node.level }}rem;">
+                <a href="{{ node.get_absolute_url }}" class="text-decoration-none">
+                    {% if not node.is_leaf_node %}
+                    <i class="bi bi-folder"></i>
+                    {% else %}
+                    <i class="bi bi-folder2"></i>
+                    {% endif %}
+                    {{ node.name }}
+                </a>
+                <span class="badge bg-secondary ms-2">{{ node.threat_models.count }} threat models</span>
+                {% if not node.is_leaf_node %}
+                <ul class="list-unstyled mt-2">
+                    {{ children }}
+                </ul>
+                {% endif %}
+            </li>
+            {% endrecursetree %}
+        </ul>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    No business units have been created yet. Use the admin interface to create some.
+</div>
+{% endif %}
+{% endblock %}

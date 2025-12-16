@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Threat Model Dashboard Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+        }
+        h1 {
+            color: #0d6efd;
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #333;
+            margin-top: 30px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .stat-box {
+            width: 23%;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+        }
+        .stat-box h3 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .stat-box p {
+            margin: 5px 0 0 0;
+            font-size: 11px;
+        }
+        .bg-primary { background-color: #0d6efd; color: white; }
+        .bg-success { background-color: #198754; color: white; }
+        .bg-info { background-color: #0dcaf0; }
+        .bg-warning { background-color: #ffc107; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+        .risk-1 { background-color: #198754; color: white; }
+        .risk-2 { background-color: #20c997; color: white; }
+        .risk-3 { background-color: #ffc107; }
+        .risk-4 { background-color: #fd7e14; color: white; }
+        .risk-5 { background-color: #dc3545; color: white; }
+        .footer {
+            margin-top: 40px;
+            padding-top: 10px;
+            border-top: 1px solid #dee2e6;
+            font-size: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Threat Model Executive Dashboard</h1>
+    <p>Generated: {% now "F d, Y H:i" %}</p>
+
+    <div class="stats-row">
+        <div class="stat-box bg-primary">
+            <h3>{{ total_threat_models }}</h3>
+            <p>Total Threat Models</p>
+        </div>
+        <div class="stat-box bg-success">
+            <h3>{{ published_count }}</h3>
+            <p>Published</p>
+        </div>
+        <div class="stat-box bg-info">
+            <h3>{{ total_findings }}</h3>
+            <p>Total Findings</p>
+        </div>
+        <div class="stat-box bg-warning">
+            <h3>{{ high_risk_findings|length }}</h3>
+            <p>High Risk Unmitigated</p>
+        </div>
+    </div>
+
+    <h2>Risk Distribution</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Risk Level</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in risk_distribution %}
+            <tr>
+                <td>
+                    {% if item.overall_risk == 1 %}Very Low
+                    {% elif item.overall_risk == 2 %}Low
+                    {% elif item.overall_risk == 3 %}Medium
+                    {% elif item.overall_risk == 4 %}High
+                    {% elif item.overall_risk == 5 %}Critical
+                    {% endif %}
+                </td>
+                <td>{{ item.count }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2">No risk data available</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Risk by Business Unit</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Business Unit</th>
+                <th>Threat Models</th>
+                <th>Average Risk</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in bu_risk %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.threat_model_count }}</td>
+                <td>{{ item.avg_risk|floatformat:1|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3">No business unit data available</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>STRIDE Category Distribution</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in stride_distribution %}
+            <tr>
+                <td>
+                    {% if item.stride_category == 'S' %}Spoofing
+                    {% elif item.stride_category == 'T' %}Tampering
+                    {% elif item.stride_category == 'R' %}Repudiation
+                    {% elif item.stride_category == 'I' %}Information Disclosure
+                    {% elif item.stride_category == 'D' %}Denial of Service
+                    {% elif item.stride_category == 'E' %}Elevation of Privilege
+                    {% endif %}
+                </td>
+                <td>{{ item.count }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2">No STRIDE data available</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if high_risk_findings %}
+    <h2>High Risk Findings Requiring Mitigation</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Finding ID</th>
+                <th>Threat Object</th>
+                <th>Threat Model</th>
+                <th>Risk</th>
+                <th>Owner</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for finding in high_risk_findings %}
+            <tr>
+                <td>{{ finding.threat_id }}</td>
+                <td>{{ finding.threat_object }}</td>
+                <td>{{ finding.threat_model.title }}</td>
+                <td><span class="badge risk-{{ finding.inherent_risk }}">{{ finding.inherent_risk_label }}</span></td>
+                <td>{{ finding.owner }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <div class="footer">
+        <p>This report was generated by the Threat Model Repository.</p>
+    </div>
+</body>
+</html>

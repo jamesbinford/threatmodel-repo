@@ -1,0 +1,22 @@
+# Django
+Django>=5.0,<6.0
+
+# Database
+psycopg[binary]>=3.1
+
+# Storage
+django-storages[s3]>=1.14
+boto3>=1.34
+
+# PDF Generation
+weasyprint>=60.0
+
+# Tree structures for BusinessUnit hierarchy
+django-mptt>=0.14
+
+# Forms
+django-crispy-forms>=2.1
+crispy-bootstrap5>=2024.2
+
+# Development
+python-dotenv>=1.0
