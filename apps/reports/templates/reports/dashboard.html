@@ -76,6 +76,20 @@
     </div>
 </div>
 
+<!-- Threat Trend Chart (Full Width) -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Threats by Business Line - 12 Month Trend</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="trendChart" style="height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row mb-4">
     <!-- Risk by Business Unit -->
     <div class="col-md-6">
@@ -161,6 +175,58 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Threat Trend Chart (12 months by business line)
+    const trendLabels = {{ trend_labels_json|safe }};
+    const trendDatasets = {{ trend_datasets_json|safe }};
+
+    if (trendLabels.length > 0 && trendDatasets.length > 0) {
+        new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: {
+                labels: trendLabels.map(label => {
+                    const [year, month] = label.split('-');
+                    const date = new Date(year, month - 1);
+                    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                }),
+                datasets: trendDatasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Findings'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Month'
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    } else {
+        document.getElementById('trendChart').parentElement.innerHTML =
+            '<p class="text-muted text-center py-4">No trend data available yet.</p>';
+    }
+
     // Risk Distribution Chart
     const riskData = {{ risk_distribution_json|safe }};
     const riskLabels = {1: 'Very Low', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Critical'};

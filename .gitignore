@@ -54,3 +54,11 @@ htmlcov/
 .coverage.*
 coverage.xml
 *.cover
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+terraform/.terraform.lock.hcl
+terraform/crash.log

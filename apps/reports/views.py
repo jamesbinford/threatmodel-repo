@@ -1,7 +1,11 @@
 from django.views.generic import TemplateView, View
 from django.http import HttpResponse
 from django.db.models import Count, Avg
+from django.db.models.functions import TruncMonth
 from django.template.loader import render_to_string
+from django.utils import timezone
+from datetime import timedelta
+from collections import defaultdict
 from apps.threatmodels.models import ThreatModel, Finding
 from apps.organization.models import BusinessUnit
 from apps.mitre.models import Technique
@@ -54,6 +58,60 @@ class DashboardView(TemplateView):
             inherent_risk__gte=4,
             residual_risk__isnull=True
         ).select_related('threat_model')[:10]
+
+        # Trend data: Findings by business unit over last 12 months
+        twelve_months_ago = timezone.now() - timedelta(days=365)
+
+        # Get findings grouped by month and top-level business unit
+        trend_data = Finding.objects.filter(
+            created_at__gte=twelve_months_ago
+        ).annotate(
+            month=TruncMonth('created_at')
+        ).values(
+            'month',
+            'threat_model__business_unit__name',
+            'threat_model__business_unit__parent__name'
+        ).annotate(
+            count=Count('id')
+        ).order_by('month')
+
+        # Process trend data into chart format
+        # Group by top-level business unit (or self if no parent)
+        months_set = set()
+        bu_data = defaultdict(lambda: defaultdict(int))
+
+        for item in trend_data:
+            month_str = item['month'].strftime('%Y-%m') if item['month'] else 'Unknown'
+            months_set.add(month_str)
+            # Use parent name if exists, otherwise use the BU name
+            bu_name = item['threat_model__business_unit__parent__name'] or item['threat_model__business_unit__name']
+            if bu_name:
+                bu_data[bu_name][month_str] += item['count']
+
+        # Sort months chronologically
+        sorted_months = sorted(months_set)
+
+        # Build datasets for Chart.js
+        trend_labels = sorted_months
+        trend_datasets = []
+        colors = [
+            '#0d6efd', '#198754', '#dc3545', '#ffc107', '#0dcaf0',
+            '#6f42c1', '#fd7e14', '#20c997', '#6c757d', '#d63384'
+        ]
+
+        for idx, (bu_name, month_counts) in enumerate(sorted(bu_data.items())):
+            dataset = {
+                'label': bu_name,
+                'data': [month_counts.get(m, 0) for m in sorted_months],
+                'borderColor': colors[idx % len(colors)],
+                'backgroundColor': colors[idx % len(colors)] + '20',
+                'fill': False,
+                'tension': 0.1
+            }
+            trend_datasets.append(dataset)
+
+        context['trend_labels_json'] = json.dumps(trend_labels)
+        context['trend_datasets_json'] = json.dumps(trend_datasets)
 
         return context
 
