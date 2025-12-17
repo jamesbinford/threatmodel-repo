@@ -6,4 +6,5 @@ app_name = 'reports'
 urlpatterns = [
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
     path('dashboard/pdf/', views.DashboardPDFView.as_view(), name='dashboard_pdf'),
+    path('tags/', views.TagFrequencyReportView.as_view(), name='tag_frequency'),
 ]

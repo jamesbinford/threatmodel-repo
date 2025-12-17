@@ -17,6 +17,9 @@
             <span class="badge risk-badge-{{ threat_model.overall_risk }}">Risk: {{ threat_model.risk_label }}</span>
             {% endif %}
             <span class="badge bg-secondary">{{ threat_model.business_unit.name }}</span>
+            {% for tag in threat_model.tags.all %}
+            <span class="badge bg-info">{{ tag.name }}</span>
+            {% endfor %}
         </div>
     </div>
     <div>

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ThreatModel, Diagram, Finding, Evidence
+from .models import ThreatModel, Diagram, Finding, Evidence, TechnologyTag
 
 
 class DiagramInline(admin.TabularInline):
@@ -19,13 +19,21 @@ class EvidenceInline(admin.TabularInline):
     extra = 0
 
 
+@admin.register(TechnologyTag)
+class TechnologyTagAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'created_at']
+    search_fields = ['name', 'description']
+    prepopulated_fields = {'slug': ('name',)}
+
+
 @admin.register(ThreatModel)
 class ThreatModelAdmin(admin.ModelAdmin):
     list_display = ['title', 'business_unit', 'status', 'overall_risk', 'owner', 'updated_at']
-    list_filter = ['status', 'overall_risk', 'business_unit', 'created_at']
+    list_filter = ['status', 'overall_risk', 'business_unit', 'tags', 'created_at']
     search_fields = ['title', 'description']
     prepopulated_fields = {'slug': ('title',)}
     raw_id_fields = ['owner']
+    filter_horizontal = ['tags']
     date_hierarchy = 'created_at'
     inlines = [DiagramInline, FindingInline]
 

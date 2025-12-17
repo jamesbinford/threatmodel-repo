@@ -6,7 +6,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from datetime import timedelta
 from collections import defaultdict
-from apps.threatmodels.models import ThreatModel, Finding
+from apps.threatmodels.models import ThreatModel, Finding, TechnologyTag
 from apps.organization.models import BusinessUnit
 from apps.mitre.models import Technique
 import json
@@ -141,3 +141,57 @@ class DashboardPDFView(View):
         response = HttpResponse(pdf, content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="threat-model-dashboard.pdf"'
         return response
+
+
+class TagFrequencyReportView(TemplateView):
+    """Report showing technology tag frequency over configurable time periods."""
+    template_name = 'reports/tag_frequency.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Get period from query parameter (default 30 days)
+        period = self.request.GET.get('period', '30')
+        try:
+            days = int(period)
+            if days not in [30, 60, 90, 365]:
+                days = 30
+        except ValueError:
+            days = 30
+
+        cutoff_date = timezone.now() - timedelta(days=days)
+
+        # Get tag frequency for threat models created in the period
+        tag_frequency = TechnologyTag.objects.filter(
+            threat_models__created_at__gte=cutoff_date
+        ).annotate(
+            count=Count('threat_models', distinct=True)
+        ).order_by('-count')
+
+        # Summary stats
+        total_tags = TechnologyTag.objects.count()
+        tags_used_in_period = tag_frequency.filter(count__gt=0).count()
+        threat_models_in_period = ThreatModel.objects.filter(
+            created_at__gte=cutoff_date
+        ).count()
+        tagged_threat_models = ThreatModel.objects.filter(
+            created_at__gte=cutoff_date,
+            tags__isnull=False
+        ).distinct().count()
+
+        context['period'] = days
+        context['cutoff_date'] = cutoff_date
+        context['tag_frequency'] = tag_frequency
+        context['total_tags'] = total_tags
+        context['tags_used_in_period'] = tags_used_in_period
+        context['threat_models_in_period'] = threat_models_in_period
+        context['tagged_threat_models'] = tagged_threat_models
+
+        # Chart data (top 15 tags)
+        top_tags = list(tag_frequency[:15])
+        chart_labels = [t.name for t in top_tags]
+        chart_data = [t.count for t in top_tags]
+        context['chart_labels_json'] = json.dumps(chart_labels)
+        context['chart_data_json'] = json.dumps(chart_data)
+
+        return context

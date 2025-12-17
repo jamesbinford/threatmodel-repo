@@ -5,9 +5,10 @@ from .models import ThreatModel, Finding
 class ThreatModelForm(forms.ModelForm):
     class Meta:
         model = ThreatModel
-        fields = ['title', 'slug', 'business_unit', 'description', 'overall_risk', 'status']
+        fields = ['title', 'slug', 'business_unit', 'description', 'overall_risk', 'status', 'tags']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 5}),
+            'tags': forms.CheckboxSelectMultiple(),
         }
 
     def __init__(self, *args, **kwargs):

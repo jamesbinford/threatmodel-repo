@@ -3,6 +3,20 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 
 
+class TechnologyTag(models.Model):
+    """Technology tags for categorizing threat models by the technology being assessed."""
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class ThreatModel(models.Model):
     """A threat model document containing multiple findings."""
     RISK_CHOICES = [(i, str(i)) for i in range(1, 6)]  # 1-5 scale
@@ -23,6 +37,7 @@ class ThreatModel(models.Model):
     overall_risk = models.IntegerField(choices=RISK_CHOICES, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name='owned_threat_models')
+    tags = models.ManyToManyField(TechnologyTag, blank=True, related_name='threat_models')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
