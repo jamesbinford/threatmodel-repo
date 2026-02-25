@@ -16,18 +16,6 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "db_username" {
-  description = "Database master username"
-  type        = string
-  default     = "threatmodel_admin"
-}
-
-variable "db_password" {
-  description = "Database master password"
-  type        = string
-  sensitive   = true
-}
-
 variable "ec2_key_name" {
   description = "EC2 key pair name for SSH access"
   type        = string

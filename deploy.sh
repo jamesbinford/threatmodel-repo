@@ -54,16 +54,17 @@ if [ ! -f ".env" ]; then
     echo "  SECRET_KEY=<your-secret-key>"
     echo "  DEBUG=False"
     echo "  ALLOWED_HOSTS=<your-ec2-ip>"
-    echo "  DB_NAME=threatmodel"
-    echo "  DB_USER=threatmodel_admin"
-    echo "  DB_PASSWORD=<your-db-password>"
-    echo "  DB_HOST=<rds-endpoint>"
-    echo "  DB_PORT=5432"
+    echo "  AWS_STORAGE_BUCKET_NAME=<your-s3-bucket-name>"
+    echo "  AWS_S3_REGION_NAME=us-east-1"
     exit 1
 fi
 
 # Set Django settings module
 export DJANGO_SETTINGS_MODULE=threatmodel.settings.production
+
+# Create log directory
+sudo mkdir -p /var/log/threatmodel
+sudo chown threatmodel:threatmodel /var/log/threatmodel
 
 # Run migrations
 echo "Running migrations..."
@@ -106,13 +107,47 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
+# Create daily backup cron job
+echo "Setting up daily database backup..."
+mkdir -p /opt/threatmodel/backups
+cat > /opt/threatmodel/backup-db.sh <<'BACKUP'
+#!/bin/bash
+# Daily SQLite backup to S3
+set -e
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+DB_FILE="/opt/threatmodel/db.sqlite3"
+BACKUP_DIR="/opt/threatmodel/backups"
+BUCKET=$(grep AWS_STORAGE_BUCKET_NAME /opt/threatmodel/.env | cut -d= -f2)
+
+mkdir -p "$BACKUP_DIR"
+
+if [ -f "$DB_FILE" ]; then
+    # Use sqlite3 .backup for safe copy
+    sqlite3 "$DB_FILE" ".backup $BACKUP_DIR/db_${TIMESTAMP}.sqlite3"
+
+    # Upload to S3
+    if [ -n "$BUCKET" ]; then
+        aws s3 cp "$BACKUP_DIR/db_${TIMESTAMP}.sqlite3" "s3://${BUCKET}/backups/db_${TIMESTAMP}.sqlite3"
+        echo "Backup uploaded to s3://${BUCKET}/backups/db_${TIMESTAMP}.sqlite3"
+    fi
+
+    # Keep only last 7 local backups
+    ls -t "$BACKUP_DIR"/db_*.sqlite3 | tail -n +8 | xargs -r rm
+fi
+BACKUP
+
+chmod +x /opt/threatmodel/backup-db.sh
+
+# Add cron job for daily backup at 2am
+(crontab -l 2>/dev/null | grep -v "backup-db.sh"; echo "0 2 * * * /opt/threatmodel/backup-db.sh >> /var/log/threatmodel/backup.log 2>&1") | crontab -
+
 echo ""
 echo "========================================"
 echo "Deployment complete!"
 echo "========================================"
 echo ""
 echo "To start the application:"
-echo "  1. Copy the systemd service file:"
+echo "  1. Copy the systemd service:"
 echo "     sudo cp /tmp/threatmodel.service /etc/systemd/system/"
 echo "  2. Enable and start the service:"
 echo "     sudo systemctl daemon-reload"
@@ -120,6 +155,9 @@ echo "     sudo systemctl enable threatmodel"
 echo "     sudo systemctl start threatmodel"
 echo "  3. Check status:"
 echo "     sudo systemctl status threatmodel"
+echo ""
+echo "Database: SQLite (local, backed up daily to S3)"
+echo "Media: S3 bucket (configured via .env)"
 echo ""
 echo "Or run manually:"
 echo "  source venv/bin/activate"

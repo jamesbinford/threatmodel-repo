@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and fill in the values
+
+aws_region       = "us-east-1"
+project_name     = "threatmodel"
+environment      = "dev"
+
+# Note: SQLite is used as the database (no RDS/database credentials needed)
+
+# SSH key pair name (must exist in AWS)
+ec2_key_name     = "my-key-pair"  # Change to your key pair name
+
+# Restrict SSH access to your IP (recommended)
+# Get your IP: curl -s ifconfig.me
+allowed_ssh_cidr = "0.0.0.0/0"  # Change to "YOUR_IP/32" for security

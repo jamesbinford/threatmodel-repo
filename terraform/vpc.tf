@@ -41,27 +41,6 @@ resource "aws_subnet" "public_2" {
   }
 }
 
-# Private Subnets (for RDS)
-resource "aws_subnet" "private_1" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.10.0/24"
-  availability_zone = data.aws_availability_zones.available.names[0]
-
-  tags = {
-    Name = "${var.project_name}-private-1"
-  }
-}
-
-resource "aws_subnet" "private_2" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.11.0/24"
-  availability_zone = data.aws_availability_zones.available.names[1]
-
-  tags = {
-    Name = "${var.project_name}-private-2"
-  }
-}
-
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -119,15 +98,6 @@ resource "aws_security_group" "ec2" {
     description = "HTTPS access"
   }
 
-  # Django dev server (for testing)
-  ingress {
-    from_port   = 8000
-    to_port     = 8000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Django dev server"
-  }
-
   # Outbound traffic
   egress {
     from_port   = 0
@@ -141,22 +111,3 @@ resource "aws_security_group" "ec2" {
   }
 }
 
-# Security Group for RDS
-resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-sg"
-  description = "Security group for RDS instance"
-  vpc_id      = aws_vpc.main.id
-
-  # PostgreSQL access from EC2 only
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-    description     = "PostgreSQL access from EC2"
-  }
-
-  tags = {
-    Name = "${var.project_name}-rds-sg"
-  }
-}

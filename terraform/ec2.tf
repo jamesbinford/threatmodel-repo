@@ -5,6 +5,7 @@ resource "aws_instance" "app" {
   key_name               = var.ec2_key_name
   subnet_id              = aws_subnet.public_1.id
   vpc_security_group_ids = [aws_security_group.ec2.id]
+  iam_instance_profile   = aws_iam_instance_profile.app.name
 
   root_block_device {
     volume_size = 30
@@ -20,7 +21,7 @@ resource "aws_instance" "app" {
 
               # Install Python 3.11 and dependencies
               dnf install -y python3.11 python3.11-pip python3.11-devel
-              dnf install -y git nginx gcc postgresql15-devel
+              dnf install -y git nginx gcc sqlite
 
               # Create app user
               useradd -m -s /bin/bash threatmodel

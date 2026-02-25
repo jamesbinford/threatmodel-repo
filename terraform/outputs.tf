@@ -8,14 +8,9 @@ output "ec2_public_dns" {
   value       = aws_eip.app.public_dns
 }
 
-output "rds_endpoint" {
-  description = "RDS endpoint"
-  value       = aws_db_instance.main.endpoint
-}
-
-output "rds_database_name" {
-  description = "RDS database name"
-  value       = aws_db_instance.main.db_name
+output "s3_bucket_name" {
+  description = "S3 bucket for media and backups"
+  value       = aws_s3_bucket.media.id
 }
 
 output "app_url" {
@@ -46,17 +41,17 @@ output "deployment_instructions" {
        python3.11 -m venv venv
        source venv/bin/activate
        pip install -r requirements.txt
-       pip install gunicorn psycopg2-binary
+       pip install gunicorn
 
     3. Create .env file with:
        SECRET_KEY=<generate-a-secret-key>
        DEBUG=False
        ALLOWED_HOSTS=${aws_eip.app.public_ip}
-       DB_NAME=${aws_db_instance.main.db_name}
-       DB_USER=${var.db_username}
-       DB_PASSWORD=<your-db-password>
-       DB_HOST=${aws_db_instance.main.address}
-       DB_PORT=5432
+       AWS_STORAGE_BUCKET_NAME=${aws_s3_bucket.media.id}
+       AWS_S3_REGION_NAME=${var.aws_region}
+
+       Note: SQLite is used automatically (no database config needed).
+       The database file is stored at /opt/threatmodel/db.sqlite3.
 
     4. Run migrations and collect static:
        python manage.py migrate
