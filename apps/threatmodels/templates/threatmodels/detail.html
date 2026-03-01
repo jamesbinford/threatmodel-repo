@@ -43,19 +43,35 @@
 </div>
 
 <!-- Diagrams -->
-{% if diagrams %}
 <div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">Diagrams</h5>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Diagrams ({{ diagrams|length }})</h5>
+        <a href="{% url 'threatmodels:diagram_upload' threat_model.slug %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-upload"></i> Upload Diagram
+        </a>
     </div>
     <div class="card-body">
+        {% if diagrams %}
+        {% regroup diagrams by get_diagram_type_display as diagram_groups %}
+        {% for group in diagram_groups %}
+        <h6 class="text-muted mt-3 mb-2">{{ group.grouper }}</h6>
         <div class="row">
-            {% for diagram in diagrams %}
+            {% for diagram in group.list %}
             <div class="col-md-4 mb-3">
                 <div class="card">
                     <img src="{{ diagram.file.url }}" class="card-img-top" alt="{{ diagram.title }}">
                     <div class="card-body">
-                        <h6 class="card-title">{{ diagram.title }}</h6>
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="card-title mb-1">{{ diagram.title }}</h6>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'threatmodels:diagram_edit' threat_model.slug diagram.pk %}" class="btn btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'threatmodels:diagram_delete' threat_model.slug diagram.pk %}" class="btn btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </div>
                         {% if diagram.description %}
                         <p class="card-text small">{{ diagram.description }}</p>
                         {% endif %}
@@ -64,9 +80,12 @@
             </div>
             {% endfor %}
         </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted mb-0">No diagrams yet. <a href="{% url 'threatmodels:diagram_upload' threat_model.slug %}">Upload one</a>.</p>
+        {% endif %}
     </div>
 </div>
-{% endif %}
 
 <!-- Findings -->
 <div class="card">

@@ -58,12 +58,19 @@ class ThreatModel(models.Model):
 
 class Diagram(models.Model):
     """Diagrams attached to a threat model."""
+    DIAGRAM_TYPE_CHOICES = [
+        ('architecture', 'Architecture Diagram'),
+        ('threat_model', 'Threat Model Diagram'),
+        ('other', 'Other'),
+    ]
+
     threat_model = models.ForeignKey(
         ThreatModel,
         on_delete=models.CASCADE,
         related_name='diagrams'
     )
     title = models.CharField(max_length=200)
+    diagram_type = models.CharField(max_length=20, choices=DIAGRAM_TYPE_CHOICES, default='other')
     file = models.FileField(upload_to='diagrams/')
     description = models.TextField(blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)

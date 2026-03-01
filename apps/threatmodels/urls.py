@@ -10,4 +10,7 @@ urlpatterns = [
     path('<slug:slug>/edit/', views.ThreatModelUpdateView.as_view(), name='edit'),
     path('<slug:slug>/findings/add/', views.FindingCreateView.as_view(), name='finding_add'),
     path('<slug:slug>/findings/<int:pk>/edit/', views.FindingUpdateView.as_view(), name='finding_edit'),
+    path('<slug:slug>/diagrams/upload/', views.DiagramUploadView.as_view(), name='diagram_upload'),
+    path('<slug:slug>/diagrams/<int:pk>/edit/', views.DiagramUpdateView.as_view(), name='diagram_edit'),
+    path('<slug:slug>/diagrams/<int:pk>/delete/', views.DiagramDeleteView.as_view(), name='diagram_delete'),
 ]

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Diagram - Threat Model Repository{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{% url 'threatmodels:list' %}">Threat Models</a></li>
+<li class="breadcrumb-item"><a href="{{ threat_model.get_absolute_url }}">{{ threat_model.title }}</a></li>
+<li class="breadcrumb-item active">Delete Diagram</li>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">Delete Diagram</h4>
+            </div>
+            <div class="card-body">
+                <p>Are you sure you want to delete the diagram <strong>"{{ object.title }}"</strong>?</p>
+                {% if object.file %}
+                <div class="mb-3">
+                    <img src="{{ object.file.url }}" alt="{{ object.title }}" class="img-thumbnail" style="max-height: 200px;">
+                </div>
+                {% endif %}
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                        <a href="{{ threat_model.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

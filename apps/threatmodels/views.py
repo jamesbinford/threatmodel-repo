@@ -1,9 +1,9 @@
-from django.views.generic import ListView, DetailView, CreateView, UpdateView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse_lazy, reverse
 from django.utils.text import slugify
-from .models import ThreatModel, Finding
-from .forms import ThreatModelForm, FindingForm
+from .models import ThreatModel, Finding, Diagram
+from .forms import ThreatModelForm, FindingForm, DiagramForm
 
 
 class ThreatModelListView(ListView):
@@ -89,6 +89,51 @@ class FindingUpdateView(LoginRequiredMixin, UpdateView):
     model = Finding
     form_class = FindingForm
     template_name = 'threatmodels/finding_form.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['threat_model'] = self.object.threat_model
+        return context
+
+    def get_success_url(self):
+        return reverse('threatmodels:detail', kwargs={'slug': self.object.threat_model.slug})
+
+
+class DiagramUploadView(LoginRequiredMixin, CreateView):
+    model = Diagram
+    form_class = DiagramForm
+    template_name = 'threatmodels/diagram_form.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['threat_model'] = ThreatModel.objects.get(slug=self.kwargs['slug'])
+        return context
+
+    def form_valid(self, form):
+        form.instance.threat_model = ThreatModel.objects.get(slug=self.kwargs['slug'])
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('threatmodels:detail', kwargs={'slug': self.kwargs['slug']})
+
+
+class DiagramUpdateView(LoginRequiredMixin, UpdateView):
+    model = Diagram
+    form_class = DiagramForm
+    template_name = 'threatmodels/diagram_form.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['threat_model'] = self.object.threat_model
+        return context
+
+    def get_success_url(self):
+        return reverse('threatmodels:detail', kwargs={'slug': self.object.threat_model.slug})
+
+
+class DiagramDeleteView(LoginRequiredMixin, DeleteView):
+    model = Diagram
+    template_name = 'threatmodels/diagram_confirm_delete.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
