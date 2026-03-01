@@ -5,13 +5,13 @@
 {% block breadcrumb %}{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div>
     <h1 class="mb-4">Threat Model Repository</h1>
 
     <!-- Stats Cards -->
     <div class="row mb-4">
         <div class="col-md-4">
-            <div class="card bg-primary text-white">
+            <div class="card chase-stat-card chase-stat-blue">
                 <div class="card-body">
                     <h5 class="card-title">Total Threat Models</h5>
                     <h2>{{ total_threat_models }}</h2>
@@ -19,7 +19,7 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card bg-success text-white">
+            <div class="card chase-stat-card chase-stat-green">
                 <div class="card-body">
                     <h5 class="card-title">Published</h5>
                     <h2>{{ published_count }}</h2>
@@ -27,7 +27,7 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card bg-secondary text-white">
+            <div class="card chase-stat-card chase-stat-info">
                 <div class="card-body">
                     <h5 class="card-title">Drafts</h5>
                     <h2>{{ draft_count }}</h2>

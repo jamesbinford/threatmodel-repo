@@ -1,0 +1,444 @@
+/* ============================================================
+   Chase.com-Inspired Design System
+   For Django Threat Model Repository (Bootstrap 5)
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   CSS Custom Properties
+   ------------------------------------------------------------ */
+:root {
+  --chase-navy:      #002F6C;
+  --chase-blue:      #005EB8;
+  --chase-bright:    #0060F0;
+  --chase-hover:     #0A4386;
+  --chase-light-blue:#71B8FF;
+  --chase-bg:        #F5F7F8;
+  --chase-text:      #101820;
+  --chase-green:     #128842;
+  --chase-border:    rgba(0, 0, 0, 0.08);
+}
+
+/* ------------------------------------------------------------
+   Body / Typography
+   ------------------------------------------------------------ */
+body {
+  font-family: 'Open Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  background: var(--chase-bg);
+  color: var(--chase-text);
+}
+
+/* ------------------------------------------------------------
+   Links
+   ------------------------------------------------------------ */
+a {
+  color: var(--chase-bright);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--chase-hover);
+}
+
+/* ------------------------------------------------------------
+   Top Navbar (.chase-navbar)
+   ------------------------------------------------------------ */
+.chase-navbar {
+  background: var(--chase-navy);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chase-navbar .navbar-brand {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.chase-navbar .navbar-brand:hover,
+.chase-navbar .navbar-brand:focus {
+  color: #ffffff;
+}
+
+.chase-navbar .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+  transition: color 0.15s ease-in-out;
+}
+
+.chase-navbar .nav-link:hover,
+.chase-navbar .nav-link:focus {
+  color: rgba(255, 255, 255, 1);
+}
+
+.chase-navbar .nav-link.active {
+  color: rgba(255, 255, 255, 1);
+  border-bottom: 2px solid var(--chase-light-blue);
+}
+
+.chase-navbar .navbar-toggler {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.chase-navbar .navbar-toggler-icon {
+  filter: invert(1);
+}
+
+.chase-navbar .dropdown-menu {
+  background: var(--chase-navy);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.chase-navbar .dropdown-item {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chase-navbar .dropdown-item:hover {
+  color: #ffffff;
+  background: var(--chase-hover);
+}
+
+/* ------------------------------------------------------------
+   Main Content Wrapper
+   ------------------------------------------------------------ */
+.chase-main {
+  padding-top: 1rem;
+}
+
+/* ------------------------------------------------------------
+   Cards (Bootstrap .card overrides)
+   ------------------------------------------------------------ */
+.card {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  border: none;
+}
+
+.card-body {
+  padding: 1.25rem;
+}
+
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--chase-border);
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+}
+
+.card-footer {
+  background: transparent;
+  border-top-color: var(--chase-border);
+}
+
+/* ------------------------------------------------------------
+   Stat Cards (.chase-stat-card)
+   ------------------------------------------------------------ */
+.chase-stat-card {
+  background: #ffffff;
+  border-left: 4px solid var(--chase-blue);
+  color: var(--chase-text);
+  box-shadow: none;
+}
+
+.chase-stat-card.chase-stat-blue {
+  border-left-color: var(--chase-blue);
+}
+
+.chase-stat-card.chase-stat-blue h2 {
+  color: var(--chase-blue);
+}
+
+.chase-stat-card.chase-stat-green {
+  border-left-color: var(--chase-green);
+}
+
+.chase-stat-card.chase-stat-green h2 {
+  color: var(--chase-green);
+}
+
+.chase-stat-card.chase-stat-info {
+  border-left-color: var(--chase-light-blue);
+}
+
+.chase-stat-card.chase-stat-info h2 {
+  color: var(--chase-light-blue);
+}
+
+.chase-stat-card.chase-stat-warning {
+  border-left-color: #D4A017;
+}
+
+.chase-stat-card.chase-stat-warning h2 {
+  color: #D4A017;
+}
+
+/* ------------------------------------------------------------
+   High Risk Card Header
+   ------------------------------------------------------------ */
+.chase-header-danger {
+  background-color: #FFF5F5;
+  color: #C53030;
+  border-bottom: 2px solid #FC8181;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------
+   Buttons (Bootstrap overrides)
+   ------------------------------------------------------------ */
+.btn-primary {
+  background-color: var(--chase-bright);
+  border-color: var(--chase-bright);
+  border-radius: 4px;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--chase-hover);
+  border-color: var(--chase-hover);
+}
+
+.btn-primary:active,
+.btn-primary.active {
+  background-color: var(--chase-hover);
+  border-color: var(--chase-hover);
+}
+
+.btn-outline-primary {
+  color: var(--chase-blue);
+  border-color: var(--chase-blue);
+  border-radius: 4px;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+  background-color: var(--chase-blue);
+  border-color: var(--chase-blue);
+  color: #ffffff;
+}
+
+.btn-secondary {
+  background-color: #4A5568;
+  border-color: #4A5568;
+  border-radius: 4px;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+  background-color: #374151;
+  border-color: #374151;
+}
+
+.btn-outline-secondary {
+  border-color: #4A5568;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------
+   Tables (Bootstrap overrides)
+   ------------------------------------------------------------ */
+.table th {
+  font-weight: 600;
+  color: #4A5568;
+  border-bottom: 2px solid var(--chase-border);
+  padding: 0.75rem;
+}
+
+.table td {
+  padding: 0.75rem;
+  border-color: var(--chase-border);
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: var(--chase-bg);
+  --bs-table-accent-bg: var(--chase-bg);
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: #EDF2F7;
+  --bs-table-accent-bg: #EDF2F7;
+}
+
+/* ------------------------------------------------------------
+   Forms (Chase-style)
+   ------------------------------------------------------------ */
+.form-control,
+.form-select {
+  border: none;
+  border-bottom: 2px solid #949494;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.5rem 0.25rem;
+  box-shadow: none;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-bottom-color: var(--chase-blue);
+  box-shadow: none;
+  outline: none;
+  background: transparent;
+}
+
+.form-label {
+  font-weight: 600;
+  color: #4A5568;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ------------------------------------------------------------
+   Badges
+   ------------------------------------------------------------ */
+.badge {
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0.35em 0.65em;
+}
+
+/* Risk Badges */
+.risk-badge-1 {
+  background-color: #128842;
+  color: #ffffff;
+}
+
+.risk-badge-2 {
+  background-color: #5A9E0F;
+  color: #ffffff;
+}
+
+.risk-badge-3 {
+  background-color: #D4A017;
+  color: #ffffff;
+}
+
+.risk-badge-4 {
+  background-color: #E05C2A;
+  color: #ffffff;
+}
+
+.risk-badge-5 {
+  background-color: #C53030;
+  color: #ffffff;
+}
+
+/* Status Badges */
+.status-draft {
+  background-color: #6c757d;
+  color: #ffffff;
+}
+
+.status-published {
+  background-color: var(--chase-green);
+  color: #ffffff;
+}
+
+.status-archived {
+  background-color: #4A5568;
+  color: #ffffff;
+}
+
+/* ------------------------------------------------------------
+   Breadcrumbs
+   ------------------------------------------------------------ */
+.breadcrumb {
+  font-size: 0.85rem;
+}
+
+.breadcrumb-item a {
+  color: #6c757d;
+  text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+  color: var(--chase-blue);
+}
+
+.breadcrumb-item.active {
+  color: #adb5bd;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+  content: "›";
+  color: #adb5bd;
+}
+
+/* ------------------------------------------------------------
+   Alerts / Messages
+   ------------------------------------------------------------ */
+.alert {
+  border-radius: 8px;
+  border: none;
+  border-left: 4px solid transparent;
+}
+
+.alert-success {
+  background-color: #E6F4EA;
+  border-left-color: var(--chase-green);
+  color: #1B5E20;
+}
+
+.alert-danger {
+  background-color: #FDECEA;
+  border-left-color: #dc3545;
+  color: #8B0000;
+}
+
+.alert-warning {
+  background-color: #FFF8E1;
+  border-left-color: #D4A017;
+  color: #6D4C00;
+}
+
+.alert-info {
+  background-color: #E3F2FD;
+  border-left-color: var(--chase-blue);
+  color: #01579B;
+}
+
+/* ------------------------------------------------------------
+   List Group (Bootstrap overrides)
+   ------------------------------------------------------------ */
+.list-group-item {
+  border-color: var(--chase-border);
+}
+
+.list-group-item-action:hover {
+  background-color: var(--chase-bg);
+}
+
+/* ------------------------------------------------------------
+   Pagination (Bootstrap overrides)
+   ------------------------------------------------------------ */
+.page-link {
+  color: var(--chase-bright);
+  border-color: var(--chase-border);
+}
+
+.page-link:hover {
+  color: var(--chase-hover);
+}
+
+.page-item.active .page-link {
+  background-color: var(--chase-bright);
+  border-color: var(--chase-bright);
+  color: #ffffff;
+}
+
+.page-item.disabled .page-link {
+  color: #adb5bd;
+  border-color: var(--chase-border);
+}
+
+/* ------------------------------------------------------------
+   Dropdown Menu (Bootstrap overrides)
+   ------------------------------------------------------------ */
+.dropdown-menu {
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--chase-border);
+}
+
+.dropdown-item:hover {
+  background-color: var(--chase-bg);
+}

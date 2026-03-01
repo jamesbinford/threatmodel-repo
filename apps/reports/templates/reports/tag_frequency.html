@@ -24,7 +24,7 @@
 <!-- Summary Stats -->
 <div class="row mb-4">
     <div class="col-md-3">
-        <div class="card bg-primary text-white">
+        <div class="card chase-stat-card chase-stat-blue">
             <div class="card-body text-center">
                 <h2>{{ total_tags }}</h2>
                 <p class="mb-0">Total Tags</p>
@@ -32,7 +32,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-success text-white">
+        <div class="card chase-stat-card chase-stat-green">
             <div class="card-body text-center">
                 <h2>{{ tags_used_in_period }}</h2>
                 <p class="mb-0">Tags Used in Period</p>
@@ -40,7 +40,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-info text-white">
+        <div class="card chase-stat-card chase-stat-info">
             <div class="card-body text-center">
                 <h2>{{ threat_models_in_period }}</h2>
                 <p class="mb-0">Threat Models Created</p>
@@ -48,7 +48,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-warning text-dark">
+        <div class="card chase-stat-card chase-stat-warning">
             <div class="card-body text-center">
                 <h2>{{ tagged_threat_models }}</h2>
                 <p class="mb-0">Tagged Threat Models</p>
@@ -118,9 +118,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (labels.length > 0) {
         const colors = [
-            '#0d6efd', '#198754', '#dc3545', '#ffc107', '#0dcaf0',
-            '#6f42c1', '#fd7e14', '#20c997', '#6c757d', '#d63384',
-            '#0d6efd', '#198754', '#dc3545', '#ffc107', '#0dcaf0'
+            '#005EB8', '#128842', '#002F6C', '#0060F0', '#71B8FF',
+            '#0A4386', '#D4A017', '#4A9BD9', '#4A5568', '#2D7D9A',
+            '#005EB8', '#128842', '#002F6C', '#0060F0', '#71B8FF'
         ];
 
         new Chart(document.getElementById('tagChart'), {

@@ -17,7 +17,7 @@
 <!-- Summary Stats -->
 <div class="row mb-4">
     <div class="col-md-3">
-        <div class="card bg-primary text-white">
+        <div class="card chase-stat-card chase-stat-blue">
             <div class="card-body text-center">
                 <h2>{{ total_threat_models }}</h2>
                 <p class="mb-0">Total Threat Models</p>
@@ -25,7 +25,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-success text-white">
+        <div class="card chase-stat-card chase-stat-green">
             <div class="card-body text-center">
                 <h2>{{ published_count }}</h2>
                 <p class="mb-0">Published</p>
@@ -33,7 +33,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-info text-white">
+        <div class="card chase-stat-card chase-stat-info">
             <div class="card-body text-center">
                 <h2>{{ total_findings }}</h2>
                 <p class="mb-0">Total Findings</p>
@@ -41,7 +41,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-warning text-dark">
+        <div class="card chase-stat-card chase-stat-warning">
             <div class="card-body text-center">
                 <h2>{{ high_risk_findings|length }}</h2>
                 <p class="mb-0">High Risk Unmitigated</p>
@@ -140,7 +140,7 @@
 <!-- High Risk Findings -->
 {% if high_risk_findings %}
 <div class="card">
-    <div class="card-header bg-danger text-white">
+    <div class="card-header chase-header-danger">
         <h5 class="mb-0">High Risk Findings Requiring Mitigation</h5>
     </div>
     <div class="table-responsive">
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 datasets: [{
                     label: 'Findings',
                     data: strideData.map(d => d.count),
-                    backgroundColor: '#0d6efd'
+                    backgroundColor: '#005EB8'
                 }]
             },
             options: {
@@ -293,11 +293,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 datasets: [{
                     label: 'Threat Models',
                     data: buData.map(d => d.threat_model_count),
-                    backgroundColor: '#0d6efd'
+                    backgroundColor: '#005EB8'
                 }, {
                     label: 'Avg Risk',
                     data: buData.map(d => d.avg_risk ? d.avg_risk.toFixed(1) : 0),
-                    backgroundColor: '#dc3545'
+                    backgroundColor: '#C53030'
                 }]
             },
             options: {
