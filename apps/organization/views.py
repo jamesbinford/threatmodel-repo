@@ -8,7 +8,7 @@ class BusinessUnitListView(ListView):
     context_object_name = 'business_units'
 
     def get_queryset(self):
-        return BusinessUnit.objects.filter(parent__isnull=True)
+        return BusinessUnit.objects.all()
 
 
 class BusinessUnitDetailView(DetailView):
