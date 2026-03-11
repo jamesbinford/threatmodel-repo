@@ -26,3 +26,15 @@ variable "allowed_ssh_cidr" {
   type        = string
   default     = "0.0.0.0/0"  # Restrict this to your IP in production
 }
+
+variable "db_username" {
+  description = "Database administrator username"
+  type        = string
+  default     = "threatmodel"
+}
+
+variable "db_password" {
+  description = "Database administrator password"
+  type        = string
+  sensitive   = true
+}

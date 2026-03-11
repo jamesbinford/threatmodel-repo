@@ -1,6 +1,6 @@
 """
 Production settings for Threat Model Repository.
-AWS deployment configuration - optimized for cost (SQLite + S3).
+AWS 3-tier deployment configuration (ALB + EC2 + RDS PostgreSQL).
 """
 import os
 from dotenv import load_dotenv
@@ -17,13 +17,17 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
-# Database - SQLite (cost-optimized: no RDS needed)
+# Database - PostgreSQL (RDS)
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME', 'threatmodel'),
+        'USER': os.environ.get('DB_USER', 'threatmodel'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
         'OPTIONS': {
-            'timeout': 30,
+            'connect_timeout': 10,
         },
     }
 }

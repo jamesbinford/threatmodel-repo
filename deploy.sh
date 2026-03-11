@@ -1,5 +1,6 @@
 #!/bin/bash
 # Deployment script for Threat Model Repository
+# 3-tier AWS deployment (ALB + EC2 + RDS)
 # Run this script from the EC2 instance
 
 set -e
@@ -56,11 +57,23 @@ if [ ! -f ".env" ]; then
     echo "  ALLOWED_HOSTS=<your-ec2-ip>"
     echo "  AWS_STORAGE_BUCKET_NAME=<your-s3-bucket-name>"
     echo "  AWS_S3_REGION_NAME=us-east-1"
+    echo "  DB_HOST=<rds-endpoint>"
+    echo "  DB_NAME=threatmodel"
+    echo "  DB_USER=threatmodel"
+    echo "  DB_PASSWORD=<your-db-password>"
+    echo "  DB_PORT=5432"
     exit 1
 fi
 
 # Set Django settings module
 export DJANGO_SETTINGS_MODULE=threatmodel.settings.production
+
+# Test database connection
+echo "Testing database connection..."
+python manage.py check --database default || {
+    echo "ERROR: Cannot connect to database. Check DB_HOST, DB_USER, DB_PASSWORD in .env"
+    exit 1
+}
 
 # Create log directory
 sudo mkdir -p /var/log/threatmodel
@@ -107,39 +120,6 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-# Create daily backup cron job
-echo "Setting up daily database backup..."
-mkdir -p /opt/threatmodel/backups
-cat > /opt/threatmodel/backup-db.sh <<'BACKUP'
-#!/bin/bash
-# Daily SQLite backup to S3
-set -e
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-DB_FILE="/opt/threatmodel/db.sqlite3"
-BACKUP_DIR="/opt/threatmodel/backups"
-BUCKET=$(grep AWS_STORAGE_BUCKET_NAME /opt/threatmodel/.env | cut -d= -f2)
-
-mkdir -p "$BACKUP_DIR"
-
-if [ -f "$DB_FILE" ]; then
-    # Use sqlite3 .backup for safe copy
-    sqlite3 "$DB_FILE" ".backup $BACKUP_DIR/db_${TIMESTAMP}.sqlite3"
-
-    # Upload to S3
-    if [ -n "$BUCKET" ]; then
-        aws s3 cp "$BACKUP_DIR/db_${TIMESTAMP}.sqlite3" "s3://${BUCKET}/backups/db_${TIMESTAMP}.sqlite3"
-        echo "Backup uploaded to s3://${BUCKET}/backups/db_${TIMESTAMP}.sqlite3"
-    fi
-
-    # Keep only last 7 local backups
-    ls -t "$BACKUP_DIR"/db_*.sqlite3 | tail -n +8 | xargs -r rm
-fi
-BACKUP
-
-chmod +x /opt/threatmodel/backup-db.sh
-
-# Add cron job for daily backup at 2am
-(crontab -l 2>/dev/null | grep -v "backup-db.sh"; echo "0 2 * * * /opt/threatmodel/backup-db.sh >> /var/log/threatmodel/backup.log 2>&1") | crontab -
 
 echo ""
 echo "========================================"
@@ -156,7 +136,7 @@ echo "     sudo systemctl start threatmodel"
 echo "  3. Check status:"
 echo "     sudo systemctl status threatmodel"
 echo ""
-echo "Database: SQLite (local, backed up daily to S3)"
+echo "Database: RDS PostgreSQL (automated backups enabled)"
 echo "Media: S3 bucket (configured via .env)"
 echo ""
 echo "Or run manually:"

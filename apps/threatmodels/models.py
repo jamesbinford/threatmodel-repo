@@ -103,7 +103,7 @@ class Finding(models.Model):
         on_delete=models.CASCADE,
         related_name='findings'
     )
-    threat_id = models.CharField(max_length=50)  # e.g., "TM-001-F01"
+    threat_id = models.CharField(max_length=50)  # e.g., "TS-001-F01"
     scenario = models.TextField()
     threat_object = models.CharField(max_length=300)
     mitre_technique = models.ForeignKey(

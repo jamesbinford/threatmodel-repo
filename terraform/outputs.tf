@@ -1,28 +1,38 @@
-output "ec2_public_ip" {
-  description = "Public IP of EC2 instance"
-  value       = aws_eip.app.public_ip
+# ALB Outputs (Primary Entry Point)
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
 }
 
-output "ec2_public_dns" {
-  description = "Public DNS of EC2 instance"
-  value       = aws_eip.app.public_dns
+output "app_url" {
+  description = "Application URL"
+  value       = "http://${aws_lb.main.dns_name}"
 }
 
+# RDS Outputs
+output "rds_endpoint" {
+  description = "RDS PostgreSQL endpoint"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "rds_hostname" {
+  description = "RDS hostname (for DB_HOST)"
+  value       = aws_db_instance.main.address
+}
+
+# S3 Outputs
 output "s3_bucket_name" {
   description = "S3 bucket for media and backups"
   value       = aws_s3_bucket.media.id
 }
 
-output "app_url" {
-  description = "Application URL"
-  value       = "http://${aws_eip.app.public_ip}"
+# EC2 Outputs
+output "ec2_private_ip" {
+  description = "Private IP of EC2 instance"
+  value       = aws_instance.app.private_ip
 }
 
-output "ssh_command" {
-  description = "SSH command to connect to EC2"
-  value       = "ssh -i ~/.ssh/${var.ec2_key_name}.pem ec2-user@${aws_eip.app.public_ip}"
-}
-
+# Deployment Instructions
 output "deployment_instructions" {
   description = "Next steps for deployment"
   value       = <<-EOT
@@ -31,8 +41,11 @@ output "deployment_instructions" {
     DEPLOYMENT INSTRUCTIONS
     =====================================================
 
-    1. SSH into the EC2 instance:
-       ssh -i ~/.ssh/${var.ec2_key_name}.pem ec2-user@${aws_eip.app.public_ip}
+    Application URL: http://${aws_lb.main.dns_name}
+
+    1. SSH into the EC2 instance (requires bastion host or VPN):
+       Note: EC2 instance is in private subnet at ${aws_instance.app.private_ip}
+       You will need to set up a bastion host or VPN for SSH access.
 
     2. Clone and set up the application:
        sudo su - threatmodel
@@ -41,17 +54,18 @@ output "deployment_instructions" {
        python3.11 -m venv venv
        source venv/bin/activate
        pip install -r requirements.txt
-       pip install gunicorn
+       pip install gunicorn psycopg2-binary
 
     3. Create .env file with:
        SECRET_KEY=<generate-a-secret-key>
        DEBUG=False
-       ALLOWED_HOSTS=${aws_eip.app.public_ip}
+       ALLOWED_HOSTS=${aws_lb.main.dns_name}
+       DB_HOST=${aws_db_instance.main.address}
+       DB_NAME=${var.db_name}
+       DB_USER=${var.db_username}
+       DB_PASSWORD=${var.db_password}
        AWS_STORAGE_BUCKET_NAME=${aws_s3_bucket.media.id}
        AWS_S3_REGION_NAME=${var.aws_region}
-
-       Note: SQLite is used automatically (no database config needed).
-       The database file is stored at /opt/threatmodel/db.sqlite3.
 
     4. Run migrations and collect static:
        python manage.py migrate
@@ -60,9 +74,10 @@ output "deployment_instructions" {
        python manage.py seed_sample_data
 
     5. Start gunicorn (or create a systemd service):
-       gunicorn threatmodel.wsgi:application --bind 127.0.0.1:8000
+       gunicorn threatmodel.wsgi:application --bind 0.0.0.0:8000
 
-    Application URL: http://${aws_eip.app.public_ip}
+    RDS Endpoint: ${aws_db_instance.main.endpoint}
+    S3 Bucket: ${aws_s3_bucket.media.id}
     =====================================================
   EOT
 }

@@ -1,11 +1,12 @@
 # EC2 Instance
 resource "aws_instance" "app" {
-  ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.micro"
-  key_name               = var.ec2_key_name
-  subnet_id              = aws_subnet.public_1.id
-  vpc_security_group_ids = [aws_security_group.ec2.id]
-  iam_instance_profile   = aws_iam_instance_profile.app.name
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t3.micro"
+  key_name                    = var.ec2_key_name
+  subnet_id                   = aws_subnet.private_1.id
+  vpc_security_group_ids      = [aws_security_group.ec2.id]
+  iam_instance_profile        = aws_iam_instance_profile.app.name
+  associate_public_ip_address = false
 
   root_block_device {
     volume_size = 30
@@ -21,7 +22,7 @@ resource "aws_instance" "app" {
 
               # Install Python 3.11 and dependencies
               dnf install -y python3.11 python3.11-pip python3.11-devel
-              dnf install -y git nginx gcc sqlite
+              dnf install -y git nginx gcc postgresql15
 
               # Create app user
               useradd -m -s /bin/bash threatmodel
@@ -69,15 +70,5 @@ resource "aws_instance" "app" {
 
   tags = {
     Name = "${var.project_name}-app"
-  }
-}
-
-# Elastic IP for EC2
-resource "aws_eip" "app" {
-  instance = aws_instance.app.id
-  domain   = "vpc"
-
-  tags = {
-    Name = "${var.project_name}-eip"
   }
 }
