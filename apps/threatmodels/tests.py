@@ -1,10 +1,11 @@
 from tempfile import TemporaryDirectory
 
-from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from apps.accounts.models import RoleMapping
 from apps.organization.models import BusinessUnit
 from .forms import DiagramForm, FindingForm, ThreatModelForm
 from .models import Diagram, Finding, ThreatModel
@@ -28,6 +29,11 @@ class ThreatModelPolicyTests(TestCase):
             is_staff=True,
         )
         cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.child_business_unit = BusinessUnit.objects.create(
+            name='Payment APIs',
+            slug='payment-apis',
+            parent=cls.business_unit,
+        )
         cls.threat_model = ThreatModel.objects.create(
             title='Payment Gateway',
             slug='payment-gateway',
@@ -49,6 +55,14 @@ class ThreatModelPolicyTests(TestCase):
             threat_model=cls.threat_model,
             title='Architecture',
             file='diagrams/architecture.png',
+        )
+        cls.child_threat_model = ThreatModel.objects.create(
+            title='Payment API',
+            slug='payment-api',
+            business_unit=cls.child_business_unit,
+            description='Payment API threat model.',
+            overall_risk=3,
+            owner=cls.owner,
         )
 
     def test_authenticated_users_can_view_threat_models(self):
@@ -74,6 +88,54 @@ class ThreatModelPolicyTests(TestCase):
         self.assertTrue(can_manage_diagram(self.staff_user, self.diagram))
         self.assertFalse(can_manage_finding(self.other_user, self.finding))
         self.assertFalse(can_manage_diagram(self.other_user, self.diagram))
+
+    def test_contributor_group_mapping_can_edit_scoped_threat_model(self):
+        group = Group.objects.create(name='Payment Contributors')
+        self.other_user.groups.add(group)
+        RoleMapping.objects.create(
+            name='Payment Contributors',
+            group=group,
+            role=RoleMapping.ROLE_CONTRIBUTOR,
+            business_unit=self.business_unit,
+        )
+
+        self.assertTrue(can_edit_threat_model(self.other_user, self.threat_model))
+
+    def test_business_unit_owner_mapping_applies_to_descendant_business_units(self):
+        group = Group.objects.create(name='Payment Owners')
+        self.other_user.groups.add(group)
+        RoleMapping.objects.create(
+            name='Payment Owners',
+            group=group,
+            role=RoleMapping.ROLE_BUSINESS_UNIT_OWNER,
+            business_unit=self.business_unit,
+        )
+
+        self.assertTrue(can_edit_threat_model(self.other_user, self.child_threat_model))
+
+    def test_inactive_mapping_does_not_grant_edit_access(self):
+        group = Group.objects.create(name='Inactive Contributors')
+        self.other_user.groups.add(group)
+        RoleMapping.objects.create(
+            name='Inactive Contributors',
+            group=group,
+            role=RoleMapping.ROLE_CONTRIBUTOR,
+            business_unit=self.business_unit,
+            is_active=False,
+        )
+
+        self.assertFalse(can_edit_threat_model(self.other_user, self.threat_model))
+
+    def test_global_security_admin_mapping_can_edit_any_threat_model(self):
+        group = Group.objects.create(name='Security Admins')
+        self.other_user.groups.add(group)
+        RoleMapping.objects.create(
+            name='Security Admins',
+            group=group,
+            role=RoleMapping.ROLE_SECURITY_ADMIN,
+        )
+
+        self.assertTrue(can_edit_threat_model(self.other_user, self.threat_model))
 
 
 class ThreatModelAuthorizationViewTests(TestCase):
