@@ -18,6 +18,10 @@ from .policies import (
 )
 
 
+PNG_BYTES = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'
+PDF_BYTES = b'%PDF-1.7\n%test pdf'
+
+
 class ThreatModelPolicyTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -295,8 +299,35 @@ class ThreatModelFormTests(TestCase):
         self.assertIn('file', form.errors)
 
     def test_diagram_form_accepts_supported_file_extension_under_size_limit(self):
-        upload = SimpleUploadedFile('diagram.png', b'image bytes', content_type='image/png')
+        upload = SimpleUploadedFile('diagram.png', PNG_BYTES, content_type='image/png')
         form = DiagramForm(data={'title': 'Architecture', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_diagram_form_rejects_file_with_spoofed_extension(self):
+        upload = SimpleUploadedFile('diagram.png', b'not really a png', content_type='image/png')
+        form = DiagramForm(data={'title': 'Spoofed Diagram', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_diagram_form_rejects_file_with_mismatched_mime_type(self):
+        upload = SimpleUploadedFile('diagram.png', PNG_BYTES, content_type='application/pdf')
+        form = DiagramForm(data={'title': 'Mismatched Diagram', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_diagram_form_rejects_svg_uploads(self):
+        upload = SimpleUploadedFile('diagram.svg', b'<svg><script>alert(1)</script></svg>', content_type='image/svg+xml')
+        form = DiagramForm(data={'title': 'SVG Diagram', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_diagram_form_accepts_pdf_with_matching_content(self):
+        upload = SimpleUploadedFile('diagram.pdf', PDF_BYTES, content_type='application/pdf')
+        form = DiagramForm(data={'title': 'PDF Diagram', 'diagram_type': 'architecture'}, files={'file': upload})
 
         self.assertTrue(form.is_valid(), form.errors)
 
@@ -429,7 +460,7 @@ class ThreatModelPostWorkflowTests(TestCase):
                     'title': 'Architecture',
                     'diagram_type': 'architecture',
                     'description': 'Current architecture.',
-                    'file': SimpleUploadedFile('architecture.png', b'image bytes', content_type='image/png'),
+                    'file': SimpleUploadedFile('architecture.png', PNG_BYTES, content_type='image/png'),
                 },
             )
 

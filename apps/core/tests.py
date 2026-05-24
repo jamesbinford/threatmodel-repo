@@ -1,10 +1,53 @@
+import importlib
+import os
+import sys
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from apps.mitre.models import Tactic, Technique
 from apps.organization.models import BusinessUnit
 from apps.threatmodels.models import ThreatModel
+
+
+class ProductionSecuritySettingsTests(SimpleTestCase):
+    def import_production_settings(self, env):
+        sys.modules.pop('threatmodel.settings.production', None)
+        with patch.dict(os.environ, env, clear=False):
+            return importlib.import_module('threatmodel.settings.production')
+
+    def tearDown(self):
+        sys.modules.pop('threatmodel.settings.production', None)
+        super().tearDown()
+
+    def test_https_security_settings_default_to_enabled(self):
+        production_settings = self.import_production_settings({
+            'SECRET_KEY': 'test-secret-key',
+            'ALLOWED_HOSTS': 'example.com',
+        })
+
+        self.assertTrue(production_settings.SECURE_SSL_REDIRECT)
+        self.assertTrue(production_settings.SESSION_COOKIE_SECURE)
+        self.assertTrue(production_settings.CSRF_COOKIE_SECURE)
+        self.assertEqual(production_settings.SECURE_HSTS_SECONDS, 31536000)
+        self.assertEqual(production_settings.SECURE_PROXY_SSL_HEADER, ('HTTP_X_FORWARDED_PROTO', 'https'))
+
+    def test_https_security_settings_can_be_disabled_for_terminating_proxy_exceptions(self):
+        production_settings = self.import_production_settings({
+            'SECRET_KEY': 'test-secret-key',
+            'ALLOWED_HOSTS': 'example.com',
+            'SECURE_SSL_REDIRECT': 'false',
+            'SESSION_COOKIE_SECURE': 'false',
+            'CSRF_COOKIE_SECURE': 'false',
+            'USE_X_FORWARDED_PROTO': 'false',
+        })
+
+        self.assertFalse(production_settings.SECURE_SSL_REDIRECT)
+        self.assertFalse(production_settings.SESSION_COOKIE_SECURE)
+        self.assertFalse(production_settings.CSRF_COOKIE_SECURE)
+        self.assertFalse(hasattr(production_settings, 'SECURE_PROXY_SSL_HEADER'))
 
 
 class AuthenticatedReadViewTests(TestCase):
