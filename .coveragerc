@@ -1,0 +1,17 @@
+[run]
+source =
+    apps
+    threatmodel
+omit =
+    */admin.py
+    */apps.py
+    */migrations/*
+    */management/*
+    */tests.py
+    threatmodel/asgi.py
+    threatmodel/settings/*
+    threatmodel/wsgi.py
+
+[report]
+show_missing = True
+skip_covered = True

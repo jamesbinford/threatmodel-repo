@@ -1,10 +1,20 @@
-from django.contrib.auth.models import User
-from django.test import TestCase
+from tempfile import TemporaryDirectory
+
+from django.contrib.auth.models import AnonymousUser, User
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.organization.models import BusinessUnit
+from .forms import DiagramForm, FindingForm, ThreatModelForm
 from .models import Diagram, Finding, ThreatModel
-from .policies import can_edit_threat_model, can_view_threat_model
+from .policies import (
+    can_create_threat_model,
+    can_edit_threat_model,
+    can_manage_diagram,
+    can_manage_finding,
+    can_view_threat_model,
+)
 
 
 class ThreatModelPolicyTests(TestCase):
@@ -23,17 +33,47 @@ class ThreatModelPolicyTests(TestCase):
             slug='payment-gateway',
             business_unit=cls.business_unit,
             description='Payment gateway threat model.',
+            overall_risk=4,
             owner=cls.owner,
+        )
+        cls.finding = Finding.objects.create(
+            threat_model=cls.threat_model,
+            threat_id='TM-001-F01',
+            scenario='An attacker abuses weak authorization.',
+            threat_object='Payment API',
+            stride_category='E',
+            inherent_risk=4,
+            owner='API Security Team',
+        )
+        cls.diagram = Diagram.objects.create(
+            threat_model=cls.threat_model,
+            title='Architecture',
+            file='diagrams/architecture.png',
         )
 
     def test_authenticated_users_can_view_threat_models(self):
         self.assertTrue(can_view_threat_model(self.owner, self.threat_model))
         self.assertTrue(can_view_threat_model(self.other_user, self.threat_model))
 
+    def test_anonymous_users_cannot_view_or_create_threat_models(self):
+        anonymous = AnonymousUser()
+
+        self.assertFalse(can_view_threat_model(anonymous, self.threat_model))
+        self.assertFalse(can_create_threat_model(anonymous))
+
+    def test_authenticated_users_can_create_threat_models(self):
+        self.assertTrue(can_create_threat_model(self.owner))
+
     def test_only_owner_or_staff_can_edit_threat_model(self):
         self.assertTrue(can_edit_threat_model(self.owner, self.threat_model))
         self.assertTrue(can_edit_threat_model(self.staff_user, self.threat_model))
         self.assertFalse(can_edit_threat_model(self.other_user, self.threat_model))
+
+    def test_manage_child_object_policies_delegate_to_threat_model_edit_policy(self):
+        self.assertTrue(can_manage_finding(self.owner, self.finding))
+        self.assertTrue(can_manage_diagram(self.staff_user, self.diagram))
+        self.assertFalse(can_manage_finding(self.other_user, self.finding))
+        self.assertFalse(can_manage_diagram(self.other_user, self.diagram))
 
 
 class ThreatModelAuthorizationViewTests(TestCase):
@@ -102,6 +142,16 @@ class ThreatModelAuthorizationViewTests(TestCase):
 
                 self.assertEqual(response.status_code, 200)
 
+    def test_owner_can_delete_diagram(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse('threatmodels:diagram_delete', kwargs={'slug': self.threat_model.slug, 'pk': self.diagram.pk})
+        )
+
+        self.assertRedirects(response, self.threat_model.get_absolute_url())
+        self.assertFalse(Diagram.objects.filter(pk=self.diagram.pk).exists())
+
     def test_staff_can_edit_threat_model(self):
         self.client.force_login(self.staff_user)
 
@@ -136,3 +186,210 @@ class ThreatModelAuthorizationViewTests(TestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 403)
+
+
+class ThreatModelFormTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username='owner', password='pass12345')
+        cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+
+    def test_threat_model_form_allows_blank_slug_for_auto_generation(self):
+        form = ThreatModelForm(data={
+            'title': 'Payment Gateway',
+            'slug': '',
+            'business_unit': self.business_unit.pk,
+            'description': 'Payment gateway threat model.',
+            'overall_risk': 4,
+            'status': 'draft',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_finding_form_accepts_minimum_required_fields(self):
+        form = FindingForm(data={
+            'threat_id': 'TM-001-F01',
+            'scenario': 'An attacker abuses weak authorization.',
+            'threat_object': 'Payment API',
+            'stride_category': 'E',
+            'inherent_risk': 4,
+            'owner': 'API Security Team',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_diagram_form_rejects_unsupported_file_extension(self):
+        upload = SimpleUploadedFile('diagram.exe', b'not a diagram')
+        form = DiagramForm(data={'title': 'Bad Diagram', 'diagram_type': 'other'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_diagram_form_rejects_files_over_size_limit(self):
+        upload = SimpleUploadedFile('large.png', b'x' * ((10 * 1024 * 1024) + 1))
+        form = DiagramForm(data={'title': 'Large Diagram', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_diagram_form_accepts_supported_file_extension_under_size_limit(self):
+        upload = SimpleUploadedFile('diagram.png', b'image bytes', content_type='image/png')
+        form = DiagramForm(data={'title': 'Architecture', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+
+class ThreatModelPostWorkflowTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username='owner', password='pass12345')
+        cls.other_user = User.objects.create_user(username='other', password='pass12345')
+        cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.threat_model = ThreatModel.objects.create(
+            title='Payment Gateway',
+            slug='payment-gateway',
+            business_unit=cls.business_unit,
+            description='Payment gateway threat model.',
+            overall_risk=4,
+            owner=cls.owner,
+            status='draft',
+        )
+        cls.finding = Finding.objects.create(
+            threat_model=cls.threat_model,
+            threat_id='TM-001-F01',
+            scenario='An attacker abuses weak authorization.',
+            threat_object='Payment API',
+            stride_category='E',
+            inherent_risk=4,
+            owner='API Security Team',
+        )
+
+    def test_create_threat_model_assigns_owner_and_generates_slug(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(reverse('threatmodels:create'), data={
+            'title': 'Mobile Banking App',
+            'slug': '',
+            'business_unit': self.business_unit.pk,
+            'description': 'Mobile banking threat model.',
+            'overall_risk': 3,
+            'status': 'draft',
+        })
+
+        threat_model = ThreatModel.objects.get(slug='mobile-banking-app')
+        self.assertRedirects(response, threat_model.get_absolute_url())
+        self.assertEqual(threat_model.owner, self.owner)
+
+    def test_owner_can_update_threat_model(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse('threatmodels:edit', kwargs={'slug': self.threat_model.slug}),
+            data={
+                'title': 'Payment Gateway Updated',
+                'slug': self.threat_model.slug,
+                'business_unit': self.business_unit.pk,
+                'description': 'Updated description.',
+                'overall_risk': 5,
+                'status': 'published',
+            },
+        )
+
+        self.threat_model.refresh_from_db()
+        self.assertRedirects(response, self.threat_model.get_absolute_url())
+        self.assertEqual(self.threat_model.title, 'Payment Gateway Updated')
+        self.assertEqual(self.threat_model.overall_risk, 5)
+
+    def test_non_owner_cannot_update_threat_model_with_post(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse('threatmodels:edit', kwargs={'slug': self.threat_model.slug}),
+            data={
+                'title': 'Unauthorized Update',
+                'slug': self.threat_model.slug,
+                'business_unit': self.business_unit.pk,
+                'description': 'Updated description.',
+                'status': 'published',
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_owner_can_create_finding(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse('threatmodels:finding_add', kwargs={'slug': self.threat_model.slug}),
+            data={
+                'threat_id': 'TM-001-F02',
+                'scenario': 'Sensitive data is logged.',
+                'threat_object': 'Application logs',
+                'stride_category': 'I',
+                'inherent_risk': 3,
+                'residual_risk': '',
+                'mitigations': 'Sanitize logs.',
+                'owner': 'Platform Team',
+            },
+        )
+
+        self.assertRedirects(response, self.threat_model.get_absolute_url())
+        self.assertTrue(self.threat_model.findings.filter(threat_id='TM-001-F02').exists())
+
+    def test_owner_can_update_finding(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse('threatmodels:finding_edit', kwargs={'slug': self.threat_model.slug, 'pk': self.finding.pk}),
+            data={
+                'threat_id': self.finding.threat_id,
+                'scenario': 'Updated scenario.',
+                'threat_object': 'Payment API',
+                'stride_category': 'E',
+                'inherent_risk': 5,
+                'residual_risk': 2,
+                'mitigations': 'Add authorization checks.',
+                'owner': 'API Security Team',
+            },
+        )
+
+        self.finding.refresh_from_db()
+        self.assertRedirects(response, self.threat_model.get_absolute_url())
+        self.assertEqual(self.finding.scenario, 'Updated scenario.')
+        self.assertEqual(self.finding.residual_risk, 2)
+
+    def test_owner_can_upload_diagram(self):
+        self.client.force_login(self.owner)
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            response = self.client.post(
+                reverse('threatmodels:diagram_upload', kwargs={'slug': self.threat_model.slug}),
+                data={
+                    'title': 'Architecture',
+                    'diagram_type': 'architecture',
+                    'description': 'Current architecture.',
+                    'file': SimpleUploadedFile('architecture.png', b'image bytes', content_type='image/png'),
+                },
+            )
+
+        self.assertRedirects(response, self.threat_model.get_absolute_url())
+        self.assertTrue(self.threat_model.diagrams.filter(title='Architecture').exists())
+
+    def test_threat_model_list_filters_by_status_risk_and_business_unit(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('threatmodels:list'), {
+            'status': 'draft',
+            'risk': '4',
+            'business_unit': self.business_unit.pk,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context['threat_models']), [self.threat_model])
+
+    def test_create_threat_model_initializes_business_unit_from_query_string(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('threatmodels:create'), {'business_unit': self.business_unit.pk})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['form'].initial['business_unit'], str(self.business_unit.pk))
