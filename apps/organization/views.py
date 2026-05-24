@@ -1,8 +1,9 @@
 from django.views.generic import ListView, DetailView
+from django.contrib.auth.mixins import LoginRequiredMixin
 from .models import BusinessUnit
 
 
-class BusinessUnitListView(ListView):
+class BusinessUnitListView(LoginRequiredMixin, ListView):
     model = BusinessUnit
     template_name = 'organization/list.html'
     context_object_name = 'business_units'
@@ -11,7 +12,7 @@ class BusinessUnitListView(ListView):
         return BusinessUnit.objects.all()
 
 
-class BusinessUnitDetailView(DetailView):
+class BusinessUnitDetailView(LoginRequiredMixin, DetailView):
     model = BusinessUnit
     template_name = 'organization/detail.html'
     context_object_name = 'business_unit'

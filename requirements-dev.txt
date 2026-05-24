@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Test and coverage tooling
+coverage>=7.5

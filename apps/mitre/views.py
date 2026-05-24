@@ -1,8 +1,9 @@
 from django.views.generic import ListView, DetailView
+from django.contrib.auth.mixins import LoginRequiredMixin
 from .models import Tactic, Technique
 
 
-class TechniqueListView(ListView):
+class TechniqueListView(LoginRequiredMixin, ListView):
     model = Technique
     template_name = 'mitre/list.html'
     context_object_name = 'techniques'
@@ -25,7 +26,7 @@ class TechniqueListView(ListView):
         return context
 
 
-class TacticDetailView(DetailView):
+class TacticDetailView(LoginRequiredMixin, DetailView):
     model = Tactic
     template_name = 'mitre/tactic_detail.html'
     context_object_name = 'tactic'
@@ -38,7 +39,7 @@ class TacticDetailView(DetailView):
         return context
 
 
-class TechniqueDetailView(DetailView):
+class TechniqueDetailView(LoginRequiredMixin, DetailView):
     model = Technique
     template_name = 'mitre/technique_detail.html'
     context_object_name = 'technique'

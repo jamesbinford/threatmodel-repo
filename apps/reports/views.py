@@ -1,4 +1,5 @@
 from django.views.generic import TemplateView, View
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
 from django.db.models import Count, Avg
 from django.db.models.functions import TruncMonth
@@ -12,7 +13,7 @@ from apps.mitre.models import Technique
 import json
 
 
-class DashboardView(TemplateView):
+class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'reports/dashboard.html'
 
     def get_context_data(self, **kwargs):
@@ -116,7 +117,7 @@ class DashboardView(TemplateView):
         return context
 
 
-class DashboardPDFView(View):
+class DashboardPDFView(LoginRequiredMixin, View):
     def get(self, request):
         try:
             from weasyprint import HTML
@@ -143,7 +144,7 @@ class DashboardPDFView(View):
         return response
 
 
-class TagFrequencyReportView(TemplateView):
+class TagFrequencyReportView(LoginRequiredMixin, TemplateView):
     """Report showing technology tag frequency over configurable time periods."""
     template_name = 'reports/tag_frequency.html'
 

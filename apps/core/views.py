@@ -1,9 +1,10 @@
 from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 from apps.threatmodels.models import ThreatModel
 from apps.organization.models import BusinessUnit
 
 
-class HomeView(TemplateView):
+class HomeView(LoginRequiredMixin, TemplateView):
     template_name = 'core/home.html'
 
     def get_context_data(self, **kwargs):

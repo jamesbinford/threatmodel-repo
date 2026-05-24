@@ -1,12 +1,14 @@
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.urls import reverse_lazy, reverse
+from django.urls import reverse
 from django.utils.text import slugify
 from .models import ThreatModel, Finding, Diagram
 from .forms import ThreatModelForm, FindingForm, DiagramForm
+from .mixins import ThreatModelEditRequiredMixin
+from .policies import can_edit_threat_model
 
 
-class ThreatModelListView(ListView):
+class ThreatModelListView(LoginRequiredMixin, ListView):
     model = ThreatModel
     template_name = 'threatmodels/list.html'
     context_object_name = 'threat_models'
@@ -28,7 +30,7 @@ class ThreatModelListView(ListView):
         return queryset
 
 
-class ThreatModelDetailView(DetailView):
+class ThreatModelDetailView(LoginRequiredMixin, DetailView):
     model = ThreatModel
     template_name = 'threatmodels/detail.html'
     context_object_name = 'threat_model'
@@ -38,6 +40,7 @@ class ThreatModelDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         context['findings'] = self.object.findings.select_related('mitre_technique')
         context['diagrams'] = self.object.diagrams.all()
+        context['can_edit_threat_model'] = can_edit_threat_model(self.request.user, self.object)
         return context
 
 
@@ -60,32 +63,32 @@ class ThreatModelCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class ThreatModelUpdateView(LoginRequiredMixin, UpdateView):
+class ThreatModelUpdateView(LoginRequiredMixin, ThreatModelEditRequiredMixin, UpdateView):
     model = ThreatModel
     form_class = ThreatModelForm
     template_name = 'threatmodels/form.html'
     slug_url_kwarg = 'slug'
 
 
-class FindingCreateView(LoginRequiredMixin, CreateView):
+class FindingCreateView(LoginRequiredMixin, ThreatModelEditRequiredMixin, CreateView):
     model = Finding
     form_class = FindingForm
     template_name = 'threatmodels/finding_form.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['threat_model'] = ThreatModel.objects.get(slug=self.kwargs['slug'])
+        context['threat_model'] = self.threat_model
         return context
 
     def form_valid(self, form):
-        form.instance.threat_model = ThreatModel.objects.get(slug=self.kwargs['slug'])
+        form.instance.threat_model = self.threat_model
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse('threatmodels:detail', kwargs={'slug': self.kwargs['slug']})
 
 
-class FindingUpdateView(LoginRequiredMixin, UpdateView):
+class FindingUpdateView(LoginRequiredMixin, ThreatModelEditRequiredMixin, UpdateView):
     model = Finding
     form_class = FindingForm
     template_name = 'threatmodels/finding_form.html'
@@ -99,25 +102,25 @@ class FindingUpdateView(LoginRequiredMixin, UpdateView):
         return reverse('threatmodels:detail', kwargs={'slug': self.object.threat_model.slug})
 
 
-class DiagramUploadView(LoginRequiredMixin, CreateView):
+class DiagramUploadView(LoginRequiredMixin, ThreatModelEditRequiredMixin, CreateView):
     model = Diagram
     form_class = DiagramForm
     template_name = 'threatmodels/diagram_form.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['threat_model'] = ThreatModel.objects.get(slug=self.kwargs['slug'])
+        context['threat_model'] = self.threat_model
         return context
 
     def form_valid(self, form):
-        form.instance.threat_model = ThreatModel.objects.get(slug=self.kwargs['slug'])
+        form.instance.threat_model = self.threat_model
         return super().form_valid(form)
 
     def get_success_url(self):
         return reverse('threatmodels:detail', kwargs={'slug': self.kwargs['slug']})
 
 
-class DiagramUpdateView(LoginRequiredMixin, UpdateView):
+class DiagramUpdateView(LoginRequiredMixin, ThreatModelEditRequiredMixin, UpdateView):
     model = Diagram
     form_class = DiagramForm
     template_name = 'threatmodels/diagram_form.html'
@@ -131,7 +134,7 @@ class DiagramUpdateView(LoginRequiredMixin, UpdateView):
         return reverse('threatmodels:detail', kwargs={'slug': self.object.threat_model.slug})
 
 
-class DiagramDeleteView(LoginRequiredMixin, DeleteView):
+class DiagramDeleteView(LoginRequiredMixin, ThreatModelEditRequiredMixin, DeleteView):
     model = Diagram
     template_name = 'threatmodels/diagram_confirm_delete.html'
 
