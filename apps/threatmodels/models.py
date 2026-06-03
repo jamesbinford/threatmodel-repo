@@ -2,6 +2,8 @@ from django.db import models
 from django.urls import reverse
 from django.contrib.auth.models import User
 
+from .upload_validation import is_previewable_image
+
 
 class TechnologyTag(models.Model):
     """Technology tags for categorizing threat models by the technology being assessed."""
@@ -77,6 +79,10 @@ class Diagram(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.threat_model.title})"
+
+    @property
+    def is_previewable_image(self):
+        return is_previewable_image(self.file.name)
 
 
 class Finding(models.Model):

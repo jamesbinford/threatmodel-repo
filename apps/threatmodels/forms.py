@@ -1,7 +1,6 @@
-import os
-
 from django import forms
 from .models import ThreatModel, Finding, Diagram
+from .upload_validation import validate_upload_file
 
 
 class ThreatModelForm(forms.ModelForm):
@@ -43,14 +42,4 @@ class DiagramForm(forms.ModelForm):
 
     def clean_file(self):
         file = self.cleaned_data.get('file')
-        if file:
-            allowed_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.pdf']
-            ext = os.path.splitext(file.name)[1].lower()
-            if ext not in allowed_extensions:
-                raise forms.ValidationError(
-                    f'Unsupported file type. Allowed types: {", ".join(allowed_extensions)}'
-                )
-            max_size = 10 * 1024 * 1024  # 10MB
-            if file.size > max_size:
-                raise forms.ValidationError('File size must be under 10MB.')
-        return file
+        return validate_upload_file(file)

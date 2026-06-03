@@ -19,7 +19,11 @@
                 <p>Are you sure you want to delete the diagram <strong>"{{ object.title }}"</strong>?</p>
                 {% if object.file %}
                 <div class="mb-3">
+                    {% if object.is_previewable_image %}
                     <img src="{{ object.file.url }}" alt="{{ object.title }}" class="img-thumbnail" style="max-height: 200px;">
+                    {% else %}
+                    <a href="{{ object.file.url }}" target="_blank" rel="noopener">{{ object.file.name }}</a>
+                    {% endif %}
                 </div>
                 {% endif %}
                 <form method="post">

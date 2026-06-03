@@ -5,6 +5,7 @@ AWS 3-tier deployment configuration (ALB + EC2 + RDS PostgreSQL).
 import os
 from dotenv import load_dotenv
 from .base import *
+from .env import env_bool
 
 load_dotenv()
 
@@ -13,7 +14,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY environment variable is required")
 
-DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+DEBUG = env_bool(os.environ, 'DEBUG', default=False)
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
@@ -64,11 +65,16 @@ else:
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
-# Enable these when you have SSL configured
-# SECURE_SSL_REDIRECT = True
-# SESSION_COOKIE_SECURE = True
-# CSRF_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = env_bool(os.environ, 'SECURE_SSL_REDIRECT', default=True)
+SESSION_COOKIE_SECURE = env_bool(os.environ, 'SESSION_COOKIE_SECURE', default=True)
+CSRF_COOKIE_SECURE = env_bool(os.environ, 'CSRF_COOKIE_SECURE', default=True)
+
+if env_bool(os.environ, 'SECURE_PROXY_SSL_HEADER_ENABLED', default=False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Logging
 LOGGING = {

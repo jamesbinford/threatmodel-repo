@@ -5,6 +5,7 @@ from django.urls import reverse
 from apps.mitre.models import Tactic, Technique
 from apps.organization.models import BusinessUnit
 from apps.threatmodels.models import ThreatModel
+from threatmodel.settings.env import env_bool
 
 
 class AuthenticatedReadViewTests(TestCase):
@@ -83,3 +84,19 @@ class AuthenticatedReadViewTests(TestCase):
                 response = self.client.get(url)
 
                 self.assertEqual(response.status_code, 200)
+
+
+class SettingsEnvTests(TestCase):
+    def test_env_bool_uses_default_when_value_is_missing(self):
+        self.assertTrue(env_bool({}, 'MISSING', default=True))
+        self.assertFalse(env_bool({}, 'MISSING', default=False))
+
+    def test_env_bool_accepts_common_truthy_values(self):
+        for value in ['1', 'true', 'TRUE', 'yes', 'on']:
+            with self.subTest(value=value):
+                self.assertTrue(env_bool({'FLAG': value}, 'FLAG'))
+
+    def test_env_bool_treats_other_values_as_false(self):
+        for value in ['0', 'false', 'no', 'off', '']:
+            with self.subTest(value=value):
+                self.assertFalse(env_bool({'FLAG': value}, 'FLAG', default=True))

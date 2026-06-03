@@ -18,6 +18,12 @@ from .policies import (
 )
 
 
+PNG_BYTES = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'
+JPEG_BYTES = b'\xff\xd8\xff\xe0\x00\x10JFIF'
+GIF_BYTES = b'GIF89a\x01\x00\x01\x00'
+PDF_BYTES = b'%PDF-1.7\n% test pdf'
+
+
 class ThreatModelPolicyTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -287,6 +293,31 @@ class ThreatModelFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('file', form.errors)
 
+    def test_diagram_form_rejects_supported_extension_with_wrong_content(self):
+        upload = SimpleUploadedFile('diagram.png', b'not a diagram', content_type='image/png')
+        form = DiagramForm(data={'title': 'Bad Diagram', 'diagram_type': 'other'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_diagram_form_rejects_supported_extension_with_wrong_content_type(self):
+        upload = SimpleUploadedFile('diagram.png', PNG_BYTES, content_type='application/octet-stream')
+        form = DiagramForm(data={'title': 'Bad Diagram', 'diagram_type': 'other'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_diagram_form_rejects_svg_uploads(self):
+        upload = SimpleUploadedFile(
+            'diagram.svg',
+            b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+            content_type='image/svg+xml',
+        )
+        form = DiagramForm(data={'title': 'SVG Diagram', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
     def test_diagram_form_rejects_files_over_size_limit(self):
         upload = SimpleUploadedFile('large.png', b'x' * ((10 * 1024 * 1024) + 1))
         form = DiagramForm(data={'title': 'Large Diagram', 'diagram_type': 'architecture'}, files={'file': upload})
@@ -294,11 +325,22 @@ class ThreatModelFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('file', form.errors)
 
-    def test_diagram_form_accepts_supported_file_extension_under_size_limit(self):
-        upload = SimpleUploadedFile('diagram.png', b'image bytes', content_type='image/png')
-        form = DiagramForm(data={'title': 'Architecture', 'diagram_type': 'architecture'}, files={'file': upload})
+    def test_diagram_form_accepts_supported_files_with_matching_content(self):
+        uploads = [
+            SimpleUploadedFile('diagram.png', PNG_BYTES, content_type='image/png'),
+            SimpleUploadedFile('diagram.jpg', JPEG_BYTES, content_type='image/jpeg'),
+            SimpleUploadedFile('diagram.gif', GIF_BYTES, content_type='image/gif'),
+            SimpleUploadedFile('diagram.pdf', PDF_BYTES, content_type='application/pdf'),
+        ]
 
-        self.assertTrue(form.is_valid(), form.errors)
+        for upload in uploads:
+            with self.subTest(filename=upload.name):
+                form = DiagramForm(
+                    data={'title': 'Architecture', 'diagram_type': 'architecture'},
+                    files={'file': upload},
+                )
+
+                self.assertTrue(form.is_valid(), form.errors)
 
 
 class ThreatModelPostWorkflowTests(TestCase):
@@ -429,7 +471,7 @@ class ThreatModelPostWorkflowTests(TestCase):
                     'title': 'Architecture',
                     'diagram_type': 'architecture',
                     'description': 'Current architecture.',
-                    'file': SimpleUploadedFile('architecture.png', b'image bytes', content_type='image/png'),
+                    'file': SimpleUploadedFile('architecture.png', PNG_BYTES, content_type='image/png'),
                 },
             )
 
@@ -455,3 +497,36 @@ class ThreatModelPostWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['form'].initial['business_unit'], str(self.business_unit.pk))
+
+
+class DiagramRenderingTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username='owner', password='pass12345')
+        cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.threat_model = ThreatModel.objects.create(
+            title='Payment Gateway',
+            slug='payment-gateway',
+            business_unit=cls.business_unit,
+            description='Payment gateway threat model.',
+            owner=cls.owner,
+        )
+        cls.image_diagram = Diagram.objects.create(
+            threat_model=cls.threat_model,
+            title='Architecture Image',
+            file='diagrams/architecture.png',
+        )
+        cls.pdf_diagram = Diagram.objects.create(
+            threat_model=cls.threat_model,
+            title='Architecture PDF',
+            file='diagrams/architecture.pdf',
+        )
+
+    def test_threat_model_detail_previews_images_but_not_pdfs(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('threatmodels:detail', kwargs={'slug': self.threat_model.slug}))
+
+        self.assertContains(response, '<img src="/media/diagrams/architecture.png"', html=False)
+        self.assertNotContains(response, '<img src="/media/diagrams/architecture.pdf"', html=False)
+        self.assertContains(response, 'href="/media/diagrams/architecture.pdf"', html=False)

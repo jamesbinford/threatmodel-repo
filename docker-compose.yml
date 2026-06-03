@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: threatmodel-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: threatmodel
+      MYSQL_USER: threatmodel
+      MYSQL_PASSWORD: threatmodel_dev_password
+      MYSQL_ROOT_PASSWORD: threatmodel_root_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - threatmodel_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uthreatmodel", "-pthreatmodel_dev_password"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  threatmodel_mysql_data:
