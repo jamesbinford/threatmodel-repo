@@ -1,5 +1,7 @@
 # Django
 Django>=5.0,<6.0
+djangorestframework>=3.15
+PyJWT[crypto]>=2.8
 
 # Storage
 django-storages[s3]>=1.14

@@ -20,9 +20,11 @@ INSTALLED_APPS = [
     'mptt',
     'crispy_forms',
     'crispy_bootstrap5',
+    'rest_framework',
     # Local apps
     'apps.core',
     'apps.accounts',
+    'apps.api',
     'apps.organization',
     'apps.threatmodels',
     'apps.mitre',
@@ -104,3 +106,11 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+# Django REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}

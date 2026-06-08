@@ -8,6 +8,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', HomeView.as_view(), name='home'),
     path('accounts/', include('apps.accounts.urls')),
+    path('api/internal/v1/', include('apps.api.urls')),
     path('organization/', include('apps.organization.urls')),
     path('threatmodels/', include('apps.threatmodels.urls')),
     path('mitre/', include('apps.mitre.urls')),
