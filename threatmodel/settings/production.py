@@ -5,7 +5,7 @@ AWS 3-tier deployment configuration (ALB + EC2 + RDS PostgreSQL).
 import os
 from dotenv import load_dotenv
 from .base import *
-from .env import env_bool
+from .env import env_bool, env_int
 
 load_dotenv()
 
@@ -72,9 +72,14 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 SECURE_SSL_REDIRECT = env_bool(os.environ, 'SECURE_SSL_REDIRECT', default=True)
 SESSION_COOKIE_SECURE = env_bool(os.environ, 'SESSION_COOKIE_SECURE', default=True)
 CSRF_COOKIE_SECURE = env_bool(os.environ, 'CSRF_COOKIE_SECURE', default=True)
+SECURE_HSTS_SECONDS = env_int(os.environ, 'SECURE_HSTS_SECONDS', default=31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(os.environ, 'SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True)
+SECURE_HSTS_PRELOAD = env_bool(os.environ, 'SECURE_HSTS_PRELOAD', default=True)
 
 if env_bool(os.environ, 'SECURE_PROXY_SSL_HEADER_ENABLED', default=False):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+UPLOAD_MALWARE_SCANNER = os.environ.get('UPLOAD_MALWARE_SCANNER') or None
 
 # Logging
 LOGGING = {

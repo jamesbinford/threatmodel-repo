@@ -1,6 +1,8 @@
 import os
 
 from django import forms
+from django.conf import settings
+from django.utils.module_loading import import_string
 
 
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024
@@ -64,6 +66,21 @@ def _read_signature(uploaded_file):
     return header
 
 
+def _scan_for_malware(uploaded_file):
+    scanner_path = getattr(settings, "UPLOAD_MALWARE_SCANNER", None)
+    if not scanner_path:
+        return
+
+    position = uploaded_file.tell() if hasattr(uploaded_file, "tell") else None
+    scanner = import_string(scanner_path)
+    is_clean = scanner(uploaded_file)
+    if position is not None and hasattr(uploaded_file, "seek"):
+        uploaded_file.seek(position)
+
+    if is_clean is not True:
+        raise forms.ValidationError("Uploaded file failed malware scanning.")
+
+
 def validate_upload_file(uploaded_file):
     if not uploaded_file:
         return uploaded_file
@@ -87,5 +104,7 @@ def validate_upload_file(uploaded_file):
         raise forms.ValidationError(
             f"Uploaded file content does not match {config['label']}."
         )
+
+    _scan_for_malware(uploaded_file)
 
     return uploaded_file

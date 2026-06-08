@@ -89,6 +89,10 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Optional dotted-path callable for deployment-specific malware scanning.
+# The callable receives the uploaded file and must return True for clean files.
+UPLOAD_MALWARE_SCANNER = None
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

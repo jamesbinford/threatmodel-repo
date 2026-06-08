@@ -24,6 +24,16 @@ GIF_BYTES = b'GIF89a\x01\x00\x01\x00'
 PDF_BYTES = b'%PDF-1.7\n% test pdf'
 
 
+def clean_upload_scanner(uploaded_file):
+    uploaded_file.read()
+    return True
+
+
+def infected_upload_scanner(uploaded_file):
+    uploaded_file.read()
+    return False
+
+
 class ThreatModelPolicyTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -341,6 +351,22 @@ class ThreatModelFormTests(TestCase):
                 )
 
                 self.assertTrue(form.is_valid(), form.errors)
+
+    @override_settings(UPLOAD_MALWARE_SCANNER='apps.threatmodels.tests.clean_upload_scanner')
+    def test_diagram_form_accepts_files_that_pass_malware_scanning(self):
+        upload = SimpleUploadedFile('diagram.png', PNG_BYTES, content_type='image/png')
+        form = DiagramForm(data={'title': 'Architecture', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(upload.tell(), 0)
+
+    @override_settings(UPLOAD_MALWARE_SCANNER='apps.threatmodels.tests.infected_upload_scanner')
+    def test_diagram_form_rejects_files_that_fail_malware_scanning(self):
+        upload = SimpleUploadedFile('diagram.png', PNG_BYTES, content_type='image/png')
+        form = DiagramForm(data={'title': 'Architecture', 'diagram_type': 'architecture'}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
 
 
 class ThreatModelPostWorkflowTests(TestCase):
