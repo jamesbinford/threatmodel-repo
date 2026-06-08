@@ -433,3 +433,193 @@ class InternalAPIReadbackTests(TestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class InternalAPIThreatModelSubmissionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username='service-account', password='pass12345')
+        cls.parent_bu = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.child_bu = BusinessUnit.objects.create(name='Payment APIs', slug='payment-apis', parent=cls.parent_bu)
+        cls.other_bu = BusinessUnit.objects.create(name='Lending', slug='lending')
+        cls.tag = TechnologyTag.objects.create(name='API', slug='api')
+        cls.tactic = Tactic.objects.create(
+            tactic_id='TA0001',
+            name='Initial Access',
+            description='Initial access tactic.',
+            framework='attack',
+            url='https://attack.mitre.org/tactics/TA0001/',
+        )
+        cls.technique = Technique.objects.create(
+            technique_id='T1190',
+            name='Exploit Public-Facing Application',
+            description='Exploit technique.',
+            framework='attack',
+            tactic=cls.tactic,
+            url='https://attack.mitre.org/techniques/T1190/',
+        )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.private_key, self.public_key = rsa_key_pair()
+        self.api_client = InternalAPIClient.objects.create(
+            name='Service Catalog',
+            entra_app_id='app-123',
+            entra_object_id='object-123',
+            user=self.user,
+            business_unit_scope=self.parent_bu,
+        )
+
+    def token(self, **overrides):
+        now = timezone.now()
+        claims = {
+            'iss': 'https://login.microsoftonline.com/tenant-123/v2.0',
+            'aud': 'api://threatmodel',
+            'tid': 'tenant-123',
+            'appid': 'app-123',
+            'oid': 'object-123',
+            'roles': ['ThreatModel.Submit'],
+            'iat': int(now.timestamp()),
+            'nbf': int(now.timestamp()),
+            'exp': int((now + timedelta(minutes=10)).timestamp()),
+        }
+        claims.update(overrides)
+        return jwt.encode(claims, self.private_key, algorithm='RS256')
+
+    def auth_settings(self):
+        return override_settings(
+            ENTRA_TENANT_ID='tenant-123',
+            ENTRA_ISSUER='https://login.microsoftonline.com/tenant-123/v2.0',
+            ENTRA_AUDIENCE='api://threatmodel',
+            ENTRA_REQUIRED_ROLES=['ThreatModel.Submit', 'ThreatModel.Read', 'ThreatModel.Admin'],
+            ENTRA_TEST_PUBLIC_KEY=self.public_key,
+        )
+
+    def authorize(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token()}')
+
+    def payload(self, **overrides):
+        data = {
+            'external_id': 'service-catalog:payments-api',
+            'source_system': 'service-catalog',
+            'title': 'Payments API',
+            'business_unit': 'payment-apis',
+            'description': 'Payments API threat model.',
+            'status': 'draft',
+            'overall_risk': 4,
+            'tags': ['API'],
+            'findings': [
+                {
+                    'external_id': 'authz-001',
+                    'threat_id': 'PAY-001',
+                    'scenario': 'Broken authorization exposes payment data.',
+                    'threat_object': 'Payments API',
+                    'stride_category': 'E',
+                    'inherent_risk': 4,
+                    'mitre_technique': 'T1190',
+                    'owner': 'AppSec',
+                    'status': 'open',
+                }
+            ],
+        }
+        data.update(overrides)
+        return data
+
+    def test_submit_threat_model_creates_model_and_nested_findings(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.post(reverse('api:threat-model-submit'), self.payload(), format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.json()
+        threat_model = ThreatModel.objects.get(external_id='service-catalog:payments-api')
+        self.assertEqual(data['slug'], 'payments-api')
+        self.assertTrue(data['created'])
+        self.assertEqual(data['finding_count'], 1)
+        self.assertEqual(data['computed_risk'], 4)
+        self.assertEqual(threat_model.owner, self.user)
+        self.assertEqual(threat_model.tags.get(), self.tag)
+        self.assertEqual(threat_model.findings.get().mitre_technique, self.technique)
+        self.assertTrue(APISubmission.objects.filter(threat_model=threat_model, status_code=201).exists())
+
+    def test_submit_threat_model_retries_update_by_external_id(self):
+        self.authorize()
+        with self.auth_settings():
+            create_response = self.client.post(reverse('api:threat-model-submit'), self.payload(), format='json')
+            update_response = self.client.post(
+                reverse('api:threat-model-submit'),
+                self.payload(title='Payments API Updated', overall_risk=5),
+                format='json',
+            )
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(update_response.json()['created'])
+        self.assertEqual(ThreatModel.objects.count(), 1)
+        self.assertEqual(Finding.objects.count(), 1)
+        threat_model = ThreatModel.objects.get()
+        self.assertEqual(threat_model.title, 'Payments API Updated')
+        self.assertEqual(threat_model.overall_risk, 5)
+
+    def test_submit_threat_model_rejects_unknown_lookup_values(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.post(
+                reverse('api:threat-model-submit'),
+                self.payload(
+                    business_unit='missing',
+                    tags=['Missing'],
+                    findings=[{
+                        'external_id': 'authz-001',
+                        'threat_id': 'PAY-001',
+                        'scenario': 'Broken authorization.',
+                        'threat_object': 'Payments API',
+                        'stride_category': 'E',
+                        'inherent_risk': 4,
+                        'mitre_technique': 'T9999',
+                        'owner': 'AppSec',
+                    }],
+                ),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('business_unit', response.json())
+        self.assertIn('tags', response.json())
+        self.assertIn('findings', response.json())
+
+    def test_submit_threat_model_rejects_invalid_enum_values(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.post(
+                reverse('api:threat-model-submit'),
+                self.payload(status='invalid', findings=[{
+                    'external_id': 'authz-001',
+                    'threat_id': 'PAY-001',
+                    'scenario': 'Broken authorization.',
+                    'threat_object': 'Payments API',
+                    'stride_category': 'X',
+                    'inherent_risk': 9,
+                    'owner': 'AppSec',
+                }]),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('status', response.json())
+        self.assertIn('findings', response.json())
+
+    def test_submit_threat_model_rejects_out_of_scope_business_unit(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.post(
+                reverse('api:threat-model-submit'),
+                self.payload(business_unit='lending'),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
