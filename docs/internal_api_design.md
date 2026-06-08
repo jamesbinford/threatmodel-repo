@@ -11,13 +11,14 @@ Use Django REST Framework (DRF).
 Reasons:
 
 - Serializer validation maps well to nested threat model and finding submissions.
-- Authentication and permission classes provide a clear place for internal API-token behavior.
+- Authentication and permission classes provide a clear place for Entra JWT validation and object-level authorization.
 - DRF gives a stable structure for future schema generation, browsable development views, pagination, and versioning.
 
 Required dependency:
 
 ```text
 djangorestframework>=3.15
+PyJWT[crypto]>=2.8
 ```
 
 Settings addition:
@@ -38,14 +39,15 @@ This keeps the surface explicitly internal and versioned.
 
 ## Authentication
 
-Phase 1 should use internal API tokens backed by Django users/service accounts.
+Primary authentication should use Microsoft Entra workload identities with OAuth2 client credentials. Each submitting system gets its own Entra application/service principal or managed identity, and calls the API with an Entra-issued bearer access token.
 
 Proposed model:
 
 ```text
-InternalAPIToken
+InternalAPIClient
 - name
-- token_hash
+- entra_app_id
+- entra_object_id
 - user -> auth.User
 - business_unit_scope -> BusinessUnit, optional
 - is_active
@@ -54,20 +56,49 @@ InternalAPIToken
 - expires_at, optional
 ```
 
-Token handling:
+Entra token handling:
 
-- Clients send `Authorization: Bearer <token>`.
-- Store only a hash of the token.
-- Resolve each token to a Django user so existing role mappings and policy helpers still apply.
+- Clients send `Authorization: Bearer <access_token>`.
+- The token must be issued by the expected Entra tenant.
+- The token audience must match this API's Entra application ID URI or client ID.
+- The token signature must validate against Entra signing keys.
+- The token must contain the required application role, such as `ThreatModel.Submit`.
+- The token `appid`, `azp`, or service principal object ID must map to an active `InternalAPIClient`.
+- Resolve the mapped client to a Django user/service account so existing role mappings and policy helpers still apply.
 - Update `last_used_at` on successful authentication.
-- Reject inactive or expired tokens.
+- Reject inactive clients, expired tokens, wrong audience, wrong issuer, unknown callers, or missing roles.
+
+Recommended Entra app roles:
+
+```text
+ThreatModel.Submit
+ThreatModel.Read
+ThreatModel.Admin
+```
+
+Expected Entra setup:
+
+- Register the Threat Model Repository API as an Entra application.
+- Expose application roles for submit/read/admin access.
+- Register each source system as a separate Entra application or use its managed identity.
+- Grant each source system only the API app role it needs.
+- Configure the source workload to request tokens for this API using client credentials.
+- Record the caller's application ID and service-principal object ID in `InternalAPIClient`.
+
+Recommended credential posture:
+
+- Prefer managed identity or workload identity federation where available.
+- Prefer certificate credentials over client secrets when federation or managed identity is not available.
+- Avoid shared "generic" service accounts; each calling system should have a distinct service principal.
 
 DRF integration:
 
 ```text
-InternalTokenAuthentication
+EntraJWTAuthentication
 InternalThreatModelPermission
 ```
+
+Local hashed API tokens may be implemented as a development or break-glass fallback, but they should not be the primary production authentication mechanism.
 
 Session authentication should not be enabled for these endpoints in production API settings. This avoids CSRF ambiguity for non-browser clients.
 
@@ -80,7 +111,7 @@ Reuse existing policy helpers:
 - Submit findings: `can_edit_threat_model(user, threat_model)`
 - Read submitted model: `can_view_threat_model(user, threat_model)`
 
-If a token has `business_unit_scope`, requested business units must match or descend from that scope.
+If an `InternalAPIClient` has `business_unit_scope`, requested business units must match or descend from that scope.
 
 ## Idempotency
 
@@ -289,11 +320,13 @@ HTTP status expectations:
 
 ## Security Requirements
 
-- Require token auth on every internal API endpoint.
+- Require Entra bearer-token authentication on every internal API endpoint.
 - Do not enable session auth for these endpoints.
 - Do not log full payloads.
 - Do not accept file uploads in v1.
 - Apply object-level authorization before returning or mutating data.
+- Validate JWT issuer, audience, signature, expiration, application role, and known caller mapping.
+- Keep caller identities one-to-one with source systems for auditability.
 - Add rate limiting later if endpoints become internet-reachable through VPN, gateway, or ALB routes.
 - Keep this API separate from public UI URLs and document it as internal-only.
 
@@ -304,7 +337,8 @@ HTTP status expectations:
 - Add DRF dependency and settings.
 - Add `apps/api` with `urls.py`, serializers, authentication, permissions, and tests.
 - Add `external_id` and `source_system` fields.
-- Add internal API token model with hashed token storage.
+- Add `InternalAPIClient` model that maps Entra app/service-principal identifiers to Django service users and optional business-unit scope.
+- Implement Entra JWT authentication with configurable tenant ID, issuer, audience, and JWKS cache.
 - Implement reference endpoint.
 
 ### Phase 2: Submission
@@ -324,5 +358,6 @@ HTTP status expectations:
 
 - Add OpenAPI schema generation.
 - Add idempotency response replay if needed.
-- Add token rotation workflow and admin UX.
+- Add Entra client onboarding/admin UX and stale-client access reviews.
+- Add optional local fallback token support only if operationally required.
 - Add throttling if deployed beyond a tightly controlled internal network.
