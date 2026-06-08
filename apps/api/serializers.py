@@ -136,6 +136,17 @@ class FindingSubmissionSerializer(serializers.Serializer):
         return technique
 
 
+class FindingBulkSubmissionSerializer(serializers.Serializer):
+    findings = FindingSubmissionSerializer(many=True)
+
+
+class FindingBulkSubmissionResponseSerializer(serializers.Serializer):
+    threat_model = serializers.CharField()
+    created = serializers.IntegerField()
+    updated = serializers.IntegerField()
+    findings = serializers.ListField(child=serializers.DictField())
+
+
 class ThreatModelSubmissionSerializer(serializers.Serializer):
     external_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=300)
     source_system = serializers.CharField(required=False, allow_blank=True, max_length=100)

@@ -11,6 +11,8 @@ from .authentication import EntraJWTAuthentication
 from .models import APISubmission
 from .permissions import InternalAPIIsAuthenticated
 from .serializers import (
+    FindingBulkSubmissionResponseSerializer,
+    FindingBulkSubmissionSerializer,
     ReferenceSerializer,
     ThreatModelReadSerializer,
     ThreatModelSubmissionResponseSerializer,
@@ -117,6 +119,48 @@ class InternalThreatModelSubmissionView(APIView):
             response_serializer.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class InternalFindingSubmissionView(APIView):
+    authentication_classes = [EntraJWTAuthentication]
+    permission_classes = [InternalAPIIsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, slug):
+        threat_model = ThreatModel.objects.filter(slug=slug).select_related('business_unit').first()
+        if threat_model is None:
+            raise NotFound('Threat model not found.')
+
+        api_client = getattr(request, 'internal_api_client', None)
+        if api_client and not api_client.business_unit_allowed(threat_model.business_unit):
+            raise PermissionDenied('API client is not scoped to this business unit.')
+        if not can_edit_threat_model(request.user, threat_model):
+            raise PermissionDenied('You do not have permission to edit this threat model.')
+
+        serializer = FindingBulkSubmissionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        created_count = 0
+        updated_count = 0
+        finding_summaries = []
+        for finding_data in serializer.validated_data['findings']:
+            finding, created = upsert_finding(threat_model, finding_data.copy())
+            created_count += 1 if created else 0
+            updated_count += 0 if created else 1
+            finding_summaries.append({
+                'external_id': finding.external_id,
+                'threat_id': finding.threat_id,
+                'status': finding.status,
+            })
+
+        APISubmission.record(request, status_code=status.HTTP_200_OK, threat_model=threat_model)
+        response_serializer = FindingBulkSubmissionResponseSerializer({
+            'threat_model': threat_model.slug,
+            'created': created_count,
+            'updated': updated_count,
+            'findings': finding_summaries,
+        })
+        return Response(response_serializer.data)
 
 
 class InternalThreatModelDetailView(APIView):

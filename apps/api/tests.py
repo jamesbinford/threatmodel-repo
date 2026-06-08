@@ -623,3 +623,169 @@ class InternalAPIThreatModelSubmissionTests(TestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class InternalAPIFindingSubmissionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username='service-account', password='pass12345')
+        cls.other_user = User.objects.create_user(username='other-service', password='pass12345')
+        cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.tactic = Tactic.objects.create(
+            tactic_id='TA0001',
+            name='Initial Access',
+            description='Initial access tactic.',
+            framework='attack',
+            url='https://attack.mitre.org/tactics/TA0001/',
+        )
+        cls.technique = Technique.objects.create(
+            technique_id='T1190',
+            name='Exploit Public-Facing Application',
+            description='Exploit technique.',
+            framework='attack',
+            tactic=cls.tactic,
+            url='https://attack.mitre.org/techniques/T1190/',
+        )
+        cls.threat_model = ThreatModel.objects.create(
+            title='Payments API',
+            slug='payments-api',
+            business_unit=cls.business_unit,
+            description='Payments API threat model.',
+            owner=cls.user,
+        )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.private_key, self.public_key = rsa_key_pair()
+        self.api_client = InternalAPIClient.objects.create(
+            name='Service Catalog',
+            entra_app_id='app-123',
+            entra_object_id='object-123',
+            user=self.user,
+        )
+        self.other_api_client = InternalAPIClient.objects.create(
+            name='Other Service',
+            entra_app_id='app-456',
+            entra_object_id='object-456',
+            user=self.other_user,
+        )
+
+    def token(self, **overrides):
+        now = timezone.now()
+        claims = {
+            'iss': 'https://login.microsoftonline.com/tenant-123/v2.0',
+            'aud': 'api://threatmodel',
+            'tid': 'tenant-123',
+            'appid': 'app-123',
+            'oid': 'object-123',
+            'roles': ['ThreatModel.Submit'],
+            'iat': int(now.timestamp()),
+            'nbf': int(now.timestamp()),
+            'exp': int((now + timedelta(minutes=10)).timestamp()),
+        }
+        claims.update(overrides)
+        return jwt.encode(claims, self.private_key, algorithm='RS256')
+
+    def auth_settings(self):
+        return override_settings(
+            ENTRA_TENANT_ID='tenant-123',
+            ENTRA_ISSUER='https://login.microsoftonline.com/tenant-123/v2.0',
+            ENTRA_AUDIENCE='api://threatmodel',
+            ENTRA_REQUIRED_ROLES=['ThreatModel.Submit', 'ThreatModel.Read', 'ThreatModel.Admin'],
+            ENTRA_TEST_PUBLIC_KEY=self.public_key,
+        )
+
+    def authorize(self, **claims):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token(**claims)}')
+
+    def finding_payload(self, **overrides):
+        finding = {
+            'external_id': 'authz-001',
+            'threat_id': 'PAY-001',
+            'scenario': 'Broken authorization exposes payment data.',
+            'threat_object': 'Payments API',
+            'stride_category': 'E',
+            'inherent_risk': 4,
+            'mitre_technique': 'T1190',
+            'owner': 'AppSec',
+            'status': 'open',
+        }
+        finding.update(overrides)
+        return {'findings': [finding]}
+
+    def test_finding_endpoint_creates_findings_for_authorized_caller(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.post(
+                reverse('api:finding-submit', kwargs={'slug': self.threat_model.slug}),
+                self.finding_payload(),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['created'], 1)
+        finding = self.threat_model.findings.get()
+        self.assertEqual(finding.external_id, 'authz-001')
+        self.assertEqual(finding.mitre_technique, self.technique)
+
+    def test_finding_endpoint_updates_existing_external_id_without_duplicate(self):
+        self.authorize()
+
+        with self.auth_settings():
+            create_response = self.client.post(
+                reverse('api:finding-submit', kwargs={'slug': self.threat_model.slug}),
+                self.finding_payload(),
+                format='json',
+            )
+            update_response = self.client.post(
+                reverse('api:finding-submit', kwargs={'slug': self.threat_model.slug}),
+                self.finding_payload(status='in_progress', inherent_risk=5),
+                format='json',
+            )
+
+        self.assertEqual(create_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.json()['updated'], 1)
+        self.assertEqual(Finding.objects.count(), 1)
+        finding = Finding.objects.get()
+        self.assertEqual(finding.status, 'in_progress')
+        self.assertEqual(finding.inherent_risk, 5)
+
+    def test_finding_endpoint_rejects_unauthorized_caller(self):
+        self.authorize(appid='app-456', oid='object-456')
+
+        with self.auth_settings():
+            response = self.client.post(
+                reverse('api:finding-submit', kwargs={'slug': self.threat_model.slug}),
+                self.finding_payload(),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Finding.objects.count(), 0)
+
+    def test_finding_endpoint_returns_not_found_for_unknown_slug(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.post(
+                reverse('api:finding-submit', kwargs={'slug': 'missing'}),
+                self.finding_payload(),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_finding_endpoint_returns_field_specific_validation_errors(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.post(
+                reverse('api:finding-submit', kwargs={'slug': self.threat_model.slug}),
+                self.finding_payload(stride_category='X', mitre_technique='T9999'),
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('findings', response.json())
