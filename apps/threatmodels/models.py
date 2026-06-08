@@ -22,6 +22,7 @@ class TechnologyTag(models.Model):
 class ThreatModel(models.Model):
     """A threat model document containing multiple findings."""
     RISK_CHOICES = [(i, str(i)) for i in range(1, 6)]  # 1-5 scale
+    RISK_LABELS = {1: 'Very Low', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Critical'}
     STATUS_CHOICES = [
         ('draft', 'Draft'),
         ('published', 'Published'),
@@ -54,8 +55,30 @@ class ThreatModel(models.Model):
 
     @property
     def risk_label(self):
-        labels = {1: 'Very Low', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Critical'}
-        return labels.get(self.overall_risk, 'Not Set')
+        return self.risk_label_for(self.overall_risk)
+
+    @classmethod
+    def risk_label_for(cls, risk):
+        return cls.RISK_LABELS.get(risk, 'Not Set')
+
+    @property
+    def computed_risk(self):
+        risks = [finding.effective_risk for finding in self.findings.all()]
+        if not risks:
+            return None
+        return max(risks)
+
+    @property
+    def computed_risk_label(self):
+        return self.risk_label_for(self.computed_risk)
+
+    @property
+    def has_risk_discrepancy(self):
+        return (
+            self.overall_risk is not None
+            and self.computed_risk is not None
+            and self.overall_risk != self.computed_risk
+        )
 
 
 class Diagram(models.Model):
@@ -140,13 +163,21 @@ class Finding(models.Model):
 
     @property
     def inherent_risk_label(self):
-        labels = {1: 'Very Low', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Critical'}
-        return labels.get(self.inherent_risk, 'Not Set')
+        return ThreatModel.risk_label_for(self.inherent_risk)
 
     @property
     def residual_risk_label(self):
-        labels = {1: 'Very Low', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Critical'}
-        return labels.get(self.residual_risk, 'Not Set')
+        return ThreatModel.risk_label_for(self.residual_risk)
+
+    @property
+    def effective_risk(self):
+        if self.residual_risk is not None and self.mitigations.strip():
+            return self.residual_risk
+        return self.inherent_risk
+
+    @property
+    def effective_risk_label(self):
+        return ThreatModel.risk_label_for(self.effective_risk)
 
     @property
     def stride_label(self):

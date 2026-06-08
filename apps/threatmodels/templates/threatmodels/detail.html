@@ -16,6 +16,9 @@
             {% if threat_model.overall_risk %}
             <span class="badge risk-badge-{{ threat_model.overall_risk }}">Risk: {{ threat_model.risk_label }}</span>
             {% endif %}
+            {% if threat_model.computed_risk %}
+            <span class="badge risk-badge-{{ threat_model.computed_risk }}">Recommended: {{ threat_model.computed_risk_label }}</span>
+            {% endif %}
             <span class="badge bg-secondary">{{ threat_model.business_unit.name }}</span>
             {% for tag in threat_model.tags.all %}
             <span class="badge bg-info">{{ tag.name }}</span>
@@ -29,6 +32,46 @@
         </a>
     </div>
     {% endif %}
+</div>
+
+<!-- Risk Recommendation -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Risk Recommendation</h5>
+    </div>
+    <div class="card-body">
+        {% if threat_model.computed_risk %}
+        <div class="row">
+            <div class="col-md-4">
+                <div class="text-muted small">Manual Risk</div>
+                {% if threat_model.overall_risk %}
+                <span class="badge risk-badge-{{ threat_model.overall_risk }}">{{ threat_model.risk_label }}</span>
+                {% else %}
+                <span class="badge bg-secondary">{{ threat_model.risk_label }}</span>
+                {% endif %}
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Computed Risk</div>
+                <span class="badge risk-badge-{{ threat_model.computed_risk }}">{{ threat_model.computed_risk_label }}</span>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Review Status</div>
+                {% if threat_model.has_risk_discrepancy %}
+                <span class="badge bg-warning text-dark">Review recommended</span>
+                {% else %}
+                <span class="badge bg-success">Aligned</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if threat_model.has_risk_discrepancy %}
+        <p class="mt-3 mb-0 text-muted">
+            The manual risk rating differs from the computed recommendation based on the current findings.
+        </p>
+        {% endif %}
+        {% else %}
+        <p class="text-muted mb-0">No finding data is available for a risk recommendation yet.</p>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Description -->

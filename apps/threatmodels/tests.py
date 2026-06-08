@@ -154,6 +154,75 @@ class ThreatModelPolicyTests(TestCase):
         self.assertTrue(can_edit_threat_model(self.other_user, self.threat_model))
 
 
+class ThreatModelRiskRollupTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(username='owner', password='pass12345')
+        cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+
+    def create_threat_model(self, **kwargs):
+        defaults = {
+            'title': 'Payment Gateway',
+            'slug': 'payment-gateway',
+            'business_unit': self.business_unit,
+            'description': 'Payment gateway threat model.',
+            'owner': self.owner,
+        }
+        defaults.update(kwargs)
+        return ThreatModel.objects.create(**defaults)
+
+    def test_computed_risk_uses_highest_effective_finding_risk(self):
+        threat_model = self.create_threat_model(overall_risk=4)
+        Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-001-F01',
+            scenario='Unmitigated account takeover.',
+            threat_object='Accounts API',
+            stride_category='E',
+            inherent_risk=5,
+            owner='API Security Team',
+        )
+        Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-001-F02',
+            scenario='Mitigated data disclosure.',
+            threat_object='Statement export',
+            stride_category='I',
+            inherent_risk=4,
+            residual_risk=2,
+            mitigations='Tokenize exported account numbers.',
+            owner='Data Platform',
+        )
+
+        self.assertEqual(threat_model.computed_risk, 5)
+        self.assertEqual(threat_model.computed_risk_label, 'Critical')
+        self.assertTrue(threat_model.has_risk_discrepancy)
+
+    def test_residual_risk_requires_mitigation_text_to_affect_rollup(self):
+        threat_model = self.create_threat_model(slug='residual-without-mitigation', overall_risk=4)
+        finding = Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-002-F01',
+            scenario='Residual score entered before mitigation details.',
+            threat_object='Payment API',
+            stride_category='I',
+            inherent_risk=4,
+            residual_risk=1,
+            owner='Platform Team',
+        )
+
+        self.assertEqual(finding.effective_risk, 4)
+        self.assertEqual(threat_model.computed_risk, 4)
+        self.assertFalse(threat_model.has_risk_discrepancy)
+
+    def test_threat_model_without_findings_has_no_computed_risk(self):
+        threat_model = self.create_threat_model(slug='no-findings', overall_risk=3)
+
+        self.assertIsNone(threat_model.computed_risk)
+        self.assertEqual(threat_model.computed_risk_label, 'Not Set')
+        self.assertFalse(threat_model.has_risk_discrepancy)
+
+
 class ThreatModelAuthorizationViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):

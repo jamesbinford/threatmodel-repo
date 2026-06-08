@@ -92,16 +92,32 @@ class ReportViewTests(TestCase):
         self.assertEqual(len(response.context['high_risk_findings']), 1)
         self.assertEqual(response.context['top_techniques'][0], self.technique)
 
+    def test_dashboard_context_includes_computed_risk_recommendations(self):
+        self.published_tm.overall_risk = 2
+        self.published_tm.save()
+
+        response = self.client.get(reverse('reports:dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            {'risk': 4, 'label': 'High', 'count': 1},
+            response.context['computed_risk_distribution'],
+        )
+        self.assertEqual(response.context['risk_discrepancy_count'], 1)
+        self.assertEqual(list(response.context['risk_discrepancies']), [self.published_tm])
+
     def test_dashboard_serializes_chart_data(self):
         response = self.client.get(reverse('reports:dashboard'))
 
         risk_distribution = json.loads(response.context['risk_distribution_json'])
+        computed_risk_distribution = json.loads(response.context['computed_risk_distribution_json'])
         stride_distribution = json.loads(response.context['stride_distribution_json'])
         bu_risk = json.loads(response.context['bu_risk_json'])
         trend_labels = json.loads(response.context['trend_labels_json'])
         trend_datasets = json.loads(response.context['trend_datasets_json'])
 
         self.assertIn({'overall_risk': 4, 'count': 1}, risk_distribution)
+        self.assertIn({'risk': 4, 'label': 'High', 'count': 1}, computed_risk_distribution)
         self.assertIn({'stride_category': 'S', 'count': 1}, stride_distribution)
         self.assertTrue(any(item['name'] == 'Digital Banking' for item in bu_risk))
         self.assertTrue(trend_labels)

@@ -6,11 +6,19 @@ from django.db.models.functions import TruncMonth
 from django.template.loader import render_to_string
 from django.utils import timezone
 from datetime import timedelta
-from collections import defaultdict
+from collections import Counter, defaultdict
 from apps.threatmodels.models import ThreatModel, Finding, TechnologyTag
 from apps.organization.models import BusinessUnit
 from apps.mitre.models import Technique
 import json
+
+
+def risk_distribution_from_values(risk_values):
+    counts = Counter(risk for risk in risk_values if risk is not None)
+    return [
+        {'risk': risk, 'label': ThreatModel.risk_label_for(risk), 'count': counts[risk]}
+        for risk in sorted(counts)
+    ]
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -32,6 +40,19 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ).order_by('overall_risk')
         context['risk_distribution'] = list(risk_distribution)
         context['risk_distribution_json'] = json.dumps(list(risk_distribution))
+
+        threat_models_with_findings = ThreatModel.objects.prefetch_related('findings')
+        computed_risk_distribution = risk_distribution_from_values(
+            threat_model.computed_risk for threat_model in threat_models_with_findings
+        )
+        risk_discrepancies = [
+            threat_model for threat_model in threat_models_with_findings
+            if threat_model.has_risk_discrepancy
+        ]
+        context['computed_risk_distribution'] = computed_risk_distribution
+        context['computed_risk_distribution_json'] = json.dumps(computed_risk_distribution)
+        context['risk_discrepancies'] = risk_discrepancies[:10]
+        context['risk_discrepancy_count'] = len(risk_discrepancies)
 
         # Risk by business unit
         bu_risk = BusinessUnit.objects.annotate(

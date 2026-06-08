@@ -125,6 +125,48 @@
         </tbody>
     </table>
 
+    <h2>Computed Risk Distribution</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Recommended Risk Level</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in computed_risk_distribution %}
+            <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.count }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2">No computed risk data available</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if risk_discrepancies %}
+    <h2>Risk Ratings Needing Review</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Threat Model</th>
+                <th>Manual Risk</th>
+                <th>Computed Risk</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for threat_model in risk_discrepancies %}
+            <tr>
+                <td>{{ threat_model.title }}</td>
+                <td>{{ threat_model.risk_label }}</td>
+                <td>{{ threat_model.computed_risk_label }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
     <h2>Risk by Business Unit</h2>
     <table>
         <thead>

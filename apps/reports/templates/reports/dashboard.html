@@ -76,6 +76,72 @@
     </div>
 </div>
 
+<div class="row mb-4">
+    <div class="col-md-5">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Computed Risk Distribution</h5>
+            </div>
+            <div class="card-body">
+                {% if computed_risk_distribution %}
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Recommended Risk</th>
+                            <th>Threat Models</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in computed_risk_distribution %}
+                        <tr>
+                            <td><span class="badge risk-badge-{{ item.risk }}">{{ item.label }}</span></td>
+                            <td>{{ item.count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0">No finding data is available for computed risk yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Risk Ratings Needing Review</h5>
+                {% if risk_discrepancy_count %}
+                <span class="badge bg-warning text-dark">{{ risk_discrepancy_count }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if risk_discrepancies %}
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Threat Model</th>
+                            <th>Manual</th>
+                            <th>Computed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for threat_model in risk_discrepancies %}
+                        <tr>
+                            <td><a href="{{ threat_model.get_absolute_url }}">{{ threat_model.title }}</a></td>
+                            <td><span class="badge risk-badge-{{ threat_model.overall_risk }}">{{ threat_model.risk_label }}</span></td>
+                            <td><span class="badge risk-badge-{{ threat_model.computed_risk }}">{{ threat_model.computed_risk_label }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0">Manual risk ratings are aligned with computed recommendations.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Threat Trend Chart (Full Width) -->
 <div class="row mb-4">
     <div class="col-12">
