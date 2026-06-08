@@ -3,6 +3,7 @@ from tempfile import TemporaryDirectory
 
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -305,6 +306,63 @@ class ThreatModelRiskRollupTests(TestCase):
         self.assertIsNone(threat_model.computed_risk)
         self.assertEqual(threat_model.computed_risk_label, 'Not Set')
         self.assertFalse(threat_model.has_risk_discrepancy)
+
+    def test_threat_model_external_id_is_unique_when_provided(self):
+        self.create_threat_model(slug='external-one', external_id='service-catalog:payments-api')
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.create_threat_model(slug='external-two', external_id='service-catalog:payments-api')
+
+    def test_finding_external_id_is_unique_per_threat_model_when_provided(self):
+        threat_model = self.create_threat_model(slug='finding-external-one')
+        other_threat_model = self.create_threat_model(title='Other', slug='finding-external-two')
+        Finding.objects.create(
+            threat_model=threat_model,
+            external_id='authz-001',
+            threat_id='TM-001-F01',
+            scenario='Authorization issue.',
+            threat_object='Payments API',
+            stride_category='E',
+            inherent_risk=4,
+            owner='AppSec',
+        )
+        Finding.objects.create(
+            threat_model=other_threat_model,
+            external_id='authz-001',
+            threat_id='TM-002-F01',
+            scenario='Authorization issue.',
+            threat_object='Other API',
+            stride_category='E',
+            inherent_risk=4,
+            owner='AppSec',
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Finding.objects.create(
+                threat_model=threat_model,
+                external_id='authz-001',
+                threat_id='TM-001-F02',
+                scenario='Duplicate external ID.',
+                threat_object='Payments API',
+                stride_category='I',
+                inherent_risk=3,
+                owner='AppSec',
+            )
+
+    def test_blank_finding_external_ids_can_repeat(self):
+        threat_model = self.create_threat_model(slug='blank-finding-external-id')
+        for index in range(2):
+            Finding.objects.create(
+                threat_model=threat_model,
+                threat_id=f'TM-001-F0{index}',
+                scenario='Issue without external ID.',
+                threat_object='Payments API',
+                stride_category='I',
+                inherent_risk=3,
+                owner='AppSec',
+            )
+
+        self.assertEqual(threat_model.findings.count(), 2)
 
 
 class ThreatModelAuthorizationViewTests(TestCase):

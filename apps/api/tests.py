@@ -11,7 +11,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.organization.models import BusinessUnit
-from .models import InternalAPIClient
+from apps.threatmodels.models import ThreatModel
+from .models import APISubmission, InternalAPIClient
 
 
 def rsa_key_pair():
@@ -112,6 +113,51 @@ class InternalAPIClientTests(TestCase):
         client.mark_used()
 
         self.assertIsNotNone(client.last_used_at)
+
+
+class APISubmissionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username='service-account', password='pass12345')
+        cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.threat_model = ThreatModel.objects.create(
+            title='Payments API',
+            slug='payments-api',
+            business_unit=cls.business_unit,
+            description='Payments API threat model.',
+            owner=cls.user,
+        )
+        cls.api_client = InternalAPIClient.objects.create(
+            name='Service Catalog',
+            entra_app_id='app-123',
+            entra_object_id='object-123',
+            user=cls.user,
+        )
+
+    def test_api_submission_records_metadata_without_payload(self):
+        request = type('Request', (), {})()
+        request.headers = {
+            'X-Request-ID': 'request-123',
+            'Idempotency-Key': 'idem-123',
+        }
+        request.path = '/api/internal/v1/threat-models/'
+        request.method = 'POST'
+        request.user = self.user
+        request.internal_api_client = self.api_client
+        request.META = {'REMOTE_ADDR': '10.0.0.5'}
+
+        submission = APISubmission.record(request, status_code=201, threat_model=self.threat_model)
+
+        self.assertEqual(submission.request_id, 'request-123')
+        self.assertEqual(submission.idempotency_key, 'idem-123')
+        self.assertEqual(submission.endpoint, '/api/internal/v1/threat-models/')
+        self.assertEqual(submission.method, 'POST')
+        self.assertEqual(submission.user, self.user)
+        self.assertEqual(submission.api_client, self.api_client)
+        self.assertEqual(submission.source_ip, '10.0.0.5')
+        self.assertEqual(submission.status_code, 201)
+        self.assertEqual(submission.threat_model, self.threat_model)
+        self.assertFalse(hasattr(submission, 'payload'))
 
 
 class EntraJWTAuthenticationTests(TestCase):

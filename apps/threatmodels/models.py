@@ -32,6 +32,8 @@ class ThreatModel(models.Model):
 
     title = models.CharField(max_length=300)
     slug = models.SlugField(unique=True)
+    external_id = models.CharField(max_length=300, unique=True, null=True, blank=True)
+    source_system = models.CharField(max_length=100, blank=True)
     business_unit = models.ForeignKey(
         'organization.BusinessUnit',
         on_delete=models.PROTECT,
@@ -141,6 +143,7 @@ class Finding(models.Model):
         related_name='findings'
     )
     threat_id = models.CharField(max_length=50)  # e.g., "TS-001-F01"
+    external_id = models.CharField(max_length=300, blank=True)
     scenario = models.TextField()
     threat_object = models.CharField(max_length=300)
     mitre_technique = models.ForeignKey(
@@ -184,6 +187,13 @@ class Finding(models.Model):
 
     class Meta:
         ordering = ['threat_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['threat_model', 'external_id'],
+                condition=~models.Q(external_id=''),
+                name='unique_finding_external_id_per_threat_model',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.threat_id}: {self.threat_object}"
