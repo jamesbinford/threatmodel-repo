@@ -1,311 +1,300 @@
 """
-Management command to seed MITRE ATT&CK and ATLAS data.
-This loads a representative sample of tactics and techniques.
-For a full load, consider fetching from MITRE's STIX data.
+Import MITRE ATT&CK and ATLAS framework data.
+
+ATT&CK is imported from the official STIX bundle. ATLAS is imported from the
+official ATLAS.yaml distribution. Local files can be supplied for repeatable
+offline imports and tests.
 """
-from django.core.management.base import BaseCommand
-from apps.mitre.models import Tactic, Technique
+import json
+from pathlib import Path
+from urllib.request import urlopen
+
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+from django.utils import timezone
+
+from apps.mitre.models import FrameworkImport, Tactic, Technique
+
+
+DEFAULT_ATTACK_URL = (
+    'https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/'
+    'enterprise-attack/enterprise-attack.json'
+)
+DEFAULT_ATLAS_URL = 'https://raw.githubusercontent.com/mitre-atlas/atlas-data/main/dist/ATLAS.yaml'
+
+
+SAMPLE_ATTACK_DATA = {
+    'id': 'sample-attack',
+    'objects': [
+        {
+            'type': 'x-mitre-tactic',
+            'name': 'Initial Access',
+            'description': 'The adversary is trying to get into your network.',
+            'x_mitre_shortname': 'initial-access',
+            'external_references': [
+                {
+                    'source_name': 'mitre-attack',
+                    'external_id': 'TA0001',
+                    'url': 'https://attack.mitre.org/tactics/TA0001/',
+                }
+            ],
+        },
+        {
+            'type': 'attack-pattern',
+            'name': 'Phishing',
+            'description': 'Adversaries may send phishing messages to gain access.',
+            'kill_chain_phases': [{'kill_chain_name': 'mitre-attack', 'phase_name': 'initial-access'}],
+            'external_references': [
+                {
+                    'source_name': 'mitre-attack',
+                    'external_id': 'T1566',
+                    'url': 'https://attack.mitre.org/techniques/T1566/',
+                }
+            ],
+        },
+    ],
+}
+
+SAMPLE_ATLAS_DATA = {
+    'version': 'sample',
+    'matrices': [
+        {
+            'tactics': [
+                {
+                    'id': 'AML.TA0004',
+                    'name': 'Initial Access',
+                    'description': 'The adversary is trying to gain access to the AI system.',
+                }
+            ],
+            'techniques': [
+                {
+                    'id': 'AML.T0043',
+                    'name': 'Prompt Injection',
+                    'description': 'Adversaries may craft malicious prompts to manipulate AI system behavior.',
+                    'tactics': ['AML.TA0004'],
+                }
+            ],
+        }
+    ],
+}
+
+
+def external_reference_id(item, prefix):
+    for reference in item.get('external_references', []):
+        external_id = reference.get('external_id')
+        if external_id and external_id.startswith(prefix):
+            return external_id, reference.get('url', '')
+    return None, ''
+
+
+def read_source(path, url):
+    if path:
+        return Path(path).read_text(encoding='utf-8'), str(path)
+    with urlopen(url, timeout=30) as response:
+        return response.read().decode('utf-8'), url
+
+
+def load_atlas_data(raw):
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        import yaml
+    except ImportError as exc:
+        raise CommandError('PyYAML is required to import ATLAS.yaml. Install requirements.txt first.') from exc
+
+    return yaml.safe_load(raw)
+
+
+def stix_version(data):
+    collection = next(
+        (
+            item for item in data.get('objects', [])
+            if item.get('type') == 'x-mitre-collection' and item.get('x_mitre_version')
+        ),
+        None,
+    )
+    return collection.get('x_mitre_version', '') if collection else ''
+
+
+def is_active(item):
+    return not item.get('revoked') and not item.get('x_mitre_deprecated')
 
 
 class Command(BaseCommand):
-    help = 'Seed the database with MITRE ATT&CK and ATLAS data'
+    help = 'Import MITRE ATT&CK and ATLAS tactics and techniques'
+
+    def add_arguments(self, parser):
+        parser.add_argument('--attack-url', default=DEFAULT_ATTACK_URL)
+        parser.add_argument('--atlas-url', default=DEFAULT_ATLAS_URL)
+        parser.add_argument('--attack-file')
+        parser.add_argument('--atlas-file')
+        parser.add_argument('--sample', action='store_true', help='Load bundled sample data instead of remote sources')
+        parser.add_argument('--skip-attack', action='store_true')
+        parser.add_argument('--skip-atlas', action='store_true')
 
     def handle(self, *args, **options):
-        self.stdout.write('Seeding MITRE data...')
-
-        # ATT&CK Tactics
-        attack_tactics = [
-            {
-                'tactic_id': 'TA0001',
-                'name': 'Initial Access',
-                'description': 'The adversary is trying to get into your network.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0001/'
-            },
-            {
-                'tactic_id': 'TA0002',
-                'name': 'Execution',
-                'description': 'The adversary is trying to run malicious code.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0002/'
-            },
-            {
-                'tactic_id': 'TA0003',
-                'name': 'Persistence',
-                'description': 'The adversary is trying to maintain their foothold.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0003/'
-            },
-            {
-                'tactic_id': 'TA0004',
-                'name': 'Privilege Escalation',
-                'description': 'The adversary is trying to gain higher-level permissions.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0004/'
-            },
-            {
-                'tactic_id': 'TA0005',
-                'name': 'Defense Evasion',
-                'description': 'The adversary is trying to avoid being detected.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0005/'
-            },
-            {
-                'tactic_id': 'TA0006',
-                'name': 'Credential Access',
-                'description': 'The adversary is trying to steal account names and passwords.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0006/'
-            },
-            {
-                'tactic_id': 'TA0007',
-                'name': 'Discovery',
-                'description': 'The adversary is trying to figure out your environment.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0007/'
-            },
-            {
-                'tactic_id': 'TA0008',
-                'name': 'Lateral Movement',
-                'description': 'The adversary is trying to move through your environment.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0008/'
-            },
-            {
-                'tactic_id': 'TA0009',
-                'name': 'Collection',
-                'description': 'The adversary is trying to gather data of interest.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0009/'
-            },
-            {
-                'tactic_id': 'TA0010',
-                'name': 'Exfiltration',
-                'description': 'The adversary is trying to steal data.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0010/'
-            },
-            {
-                'tactic_id': 'TA0011',
-                'name': 'Command and Control',
-                'description': 'The adversary is trying to communicate with compromised systems.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0011/'
-            },
-            {
-                'tactic_id': 'TA0040',
-                'name': 'Impact',
-                'description': 'The adversary is trying to manipulate, interrupt, or destroy systems and data.',
-                'framework': 'attack',
-                'url': 'https://attack.mitre.org/tactics/TA0040/'
-            },
-        ]
-
-        # Create ATT&CK tactics
-        tactic_objects = {}
-        for tactic_data in attack_tactics:
-            tactic, created = Tactic.objects.update_or_create(
-                tactic_id=tactic_data['tactic_id'],
-                defaults=tactic_data
+        if not options['skip_attack']:
+            if options['sample']:
+                attack_counts = self.import_attack(SAMPLE_ATTACK_DATA, 'sample')
+            else:
+                raw, source = read_source(options['attack_file'], options['attack_url'])
+                attack_counts = self.import_attack(json.loads(raw), source)
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Imported ATT&CK: {attack_counts['tactics']} tactics, {attack_counts['techniques']} techniques"
+                )
             )
-            tactic_objects[tactic_data['tactic_id']] = tactic
-            status = 'Created' if created else 'Updated'
-            self.stdout.write(f'  {status} tactic: {tactic}')
 
-        # ATT&CK Techniques (sample)
-        attack_techniques = [
-            # Initial Access
-            {
-                'technique_id': 'T1566',
-                'name': 'Phishing',
-                'description': 'Adversaries may send phishing messages to gain access to victim systems.',
-                'framework': 'attack',
-                'tactic_id': 'TA0001',
-                'url': 'https://attack.mitre.org/techniques/T1566/'
-            },
-            {
-                'technique_id': 'T1566.001',
-                'name': 'Spearphishing Attachment',
-                'description': 'Adversaries may send spearphishing emails with a malicious attachment.',
-                'framework': 'attack',
-                'tactic_id': 'TA0001',
-                'url': 'https://attack.mitre.org/techniques/T1566/001/',
-                'parent_id': 'T1566'
-            },
-            {
-                'technique_id': 'T1566.002',
-                'name': 'Spearphishing Link',
-                'description': 'Adversaries may send spearphishing emails with a malicious link.',
-                'framework': 'attack',
-                'tactic_id': 'TA0001',
-                'url': 'https://attack.mitre.org/techniques/T1566/002/',
-                'parent_id': 'T1566'
-            },
-            {
-                'technique_id': 'T1190',
-                'name': 'Exploit Public-Facing Application',
-                'description': 'Adversaries may attempt to exploit a weakness in an Internet-facing host or system.',
-                'framework': 'attack',
-                'tactic_id': 'TA0001',
-                'url': 'https://attack.mitre.org/techniques/T1190/'
-            },
-            # Execution
-            {
-                'technique_id': 'T1059',
-                'name': 'Command and Scripting Interpreter',
-                'description': 'Adversaries may abuse command and script interpreters to execute commands.',
-                'framework': 'attack',
-                'tactic_id': 'TA0002',
-                'url': 'https://attack.mitre.org/techniques/T1059/'
-            },
-            {
-                'technique_id': 'T1059.001',
-                'name': 'PowerShell',
-                'description': 'Adversaries may abuse PowerShell commands and scripts for execution.',
-                'framework': 'attack',
-                'tactic_id': 'TA0002',
-                'url': 'https://attack.mitre.org/techniques/T1059/001/',
-                'parent_id': 'T1059'
-            },
-            # Credential Access
-            {
-                'technique_id': 'T1110',
-                'name': 'Brute Force',
-                'description': 'Adversaries may use brute force techniques to gain access to accounts.',
-                'framework': 'attack',
-                'tactic_id': 'TA0006',
-                'url': 'https://attack.mitre.org/techniques/T1110/'
-            },
-            {
-                'technique_id': 'T1003',
-                'name': 'OS Credential Dumping',
-                'description': 'Adversaries may attempt to dump credentials to obtain account login information.',
-                'framework': 'attack',
-                'tactic_id': 'TA0006',
-                'url': 'https://attack.mitre.org/techniques/T1003/'
-            },
-            # Lateral Movement
-            {
-                'technique_id': 'T1021',
-                'name': 'Remote Services',
-                'description': 'Adversaries may use valid accounts to log into a service for remote access.',
-                'framework': 'attack',
-                'tactic_id': 'TA0008',
-                'url': 'https://attack.mitre.org/techniques/T1021/'
-            },
-            # Exfiltration
-            {
-                'technique_id': 'T1041',
-                'name': 'Exfiltration Over C2 Channel',
-                'description': 'Adversaries may steal data by exfiltrating it over an existing C2 channel.',
-                'framework': 'attack',
-                'tactic_id': 'TA0010',
-                'url': 'https://attack.mitre.org/techniques/T1041/'
-            },
-            # Impact
-            {
-                'technique_id': 'T1486',
-                'name': 'Data Encrypted for Impact',
-                'description': 'Adversaries may encrypt data on target systems to interrupt availability.',
-                'framework': 'attack',
-                'tactic_id': 'TA0040',
-                'url': 'https://attack.mitre.org/techniques/T1486/'
-            },
-        ]
-
-        # First pass: create techniques without parent references
-        technique_objects = {}
-        for tech_data in attack_techniques:
-            parent_id = tech_data.pop('parent_id', None)
-            tactic = tactic_objects[tech_data.pop('tactic_id')]
-
-            technique, created = Technique.objects.update_or_create(
-                technique_id=tech_data['technique_id'],
-                defaults={**tech_data, 'tactic': tactic}
+        if not options['skip_atlas']:
+            if options['sample']:
+                atlas_counts = self.import_atlas(SAMPLE_ATLAS_DATA, 'sample')
+            else:
+                raw, source = read_source(options['atlas_file'], options['atlas_url'])
+                atlas_counts = self.import_atlas(load_atlas_data(raw), source)
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Imported ATLAS: {atlas_counts['tactics']} tactics, {atlas_counts['techniques']} techniques"
+                )
             )
-            technique_objects[tech_data['technique_id']] = (technique, parent_id)
-            status = 'Created' if created else 'Updated'
-            self.stdout.write(f'  {status} technique: {technique}')
 
-        # Second pass: set parent references
-        for technique_id, (technique, parent_id) in technique_objects.items():
-            if parent_id and parent_id in technique_objects:
-                parent_technique = technique_objects[parent_id][0]
-                technique.parent = parent_technique
-                technique.save()
+    @transaction.atomic
+    def import_attack(self, data, source):
+        tactics_by_shortname = {}
+        tactics_by_id = {}
 
-        # ATLAS Tactics (AI-specific)
-        atlas_tactics = [
-            {
-                'tactic_id': 'AML.TA0000',
-                'name': 'ML Model Access',
-                'description': 'Techniques to gain some level of access to a machine learning model.',
-                'framework': 'atlas',
-                'url': 'https://atlas.mitre.org/tactics/AML.TA0000'
-            },
-            {
-                'tactic_id': 'AML.TA0001',
-                'name': 'ML Attack Staging',
-                'description': 'Techniques to prepare for an attack on a machine learning system.',
-                'framework': 'atlas',
-                'url': 'https://atlas.mitre.org/tactics/AML.TA0001'
-            },
-            {
-                'tactic_id': 'AML.TA0002',
-                'name': 'Initial Access',
-                'description': 'Techniques to gain initial access to a machine learning system.',
-                'framework': 'atlas',
-                'url': 'https://atlas.mitre.org/tactics/AML.TA0002'
-            },
-        ]
+        for item in data.get('objects', []):
+            if item.get('type') != 'x-mitre-tactic' or not is_active(item):
+                continue
 
-        for tactic_data in atlas_tactics:
-            tactic, created = Tactic.objects.update_or_create(
-                tactic_id=tactic_data['tactic_id'],
-                defaults=tactic_data
+            tactic_id, url = external_reference_id(item, 'TA')
+            if not tactic_id:
+                continue
+
+            tactic, _created = Tactic.objects.update_or_create(
+                tactic_id=tactic_id,
+                defaults={
+                    'name': item.get('name', tactic_id),
+                    'description': item.get('description', ''),
+                    'framework': 'attack',
+                    'url': url,
+                },
             )
-            tactic_objects[tactic_data['tactic_id']] = tactic
-            status = 'Created' if created else 'Updated'
-            self.stdout.write(f'  {status} tactic: {tactic}')
+            tactics_by_id[tactic_id] = tactic
+            shortname = item.get('x_mitre_shortname')
+            if shortname:
+                tactics_by_shortname[shortname] = tactic
 
-        # ATLAS Techniques (sample)
-        atlas_techniques = [
-            {
-                'technique_id': 'AML.T0000',
-                'name': 'ML Supply Chain Compromise',
-                'description': 'Adversaries may manipulate products or product delivery mechanisms prior to receipt.',
-                'framework': 'atlas',
-                'tactic_id': 'AML.TA0002',
-                'url': 'https://atlas.mitre.org/techniques/AML.T0000'
-            },
-            {
-                'technique_id': 'AML.T0010',
-                'name': 'ML Model Inference API Access',
-                'description': 'Adversaries may gain access to the inference API of a target model.',
-                'framework': 'atlas',
-                'tactic_id': 'AML.TA0000',
-                'url': 'https://atlas.mitre.org/techniques/AML.T0010'
-            },
-            {
-                'technique_id': 'AML.T0043',
-                'name': 'Prompt Injection',
-                'description': 'Adversaries may craft malicious prompts to manipulate AI system behavior.',
-                'framework': 'atlas',
-                'tactic_id': 'AML.TA0001',
-                'url': 'https://atlas.mitre.org/techniques/AML.T0043'
-            },
-        ]
+        technique_parent_ids = {}
+        for item in data.get('objects', []):
+            if item.get('type') != 'attack-pattern' or not is_active(item):
+                continue
 
-        for tech_data in atlas_techniques:
-            tactic = tactic_objects[tech_data.pop('tactic_id')]
+            technique_id, url = external_reference_id(item, 'T')
+            if not technique_id:
+                continue
 
-            technique, created = Technique.objects.update_or_create(
-                technique_id=tech_data['technique_id'],
-                defaults={**tech_data, 'tactic': tactic}
+            tactic = self.attack_tactic_for_item(item, tactics_by_shortname)
+            if tactic is None:
+                continue
+
+            technique, _created = Technique.objects.update_or_create(
+                technique_id=technique_id,
+                defaults={
+                    'name': item.get('name', technique_id),
+                    'description': item.get('description', ''),
+                    'framework': 'attack',
+                    'tactic': tactic,
+                    'url': url,
+                },
             )
-            status = 'Created' if created else 'Updated'
-            self.stdout.write(f'  {status} technique: {technique}')
+            if '.' in technique_id:
+                technique_parent_ids[technique_id] = technique_id.rsplit('.', 1)[0]
 
-        self.stdout.write(self.style.SUCCESS('MITRE data seeded successfully!'))
-        self.stdout.write(f'  Total tactics: {Tactic.objects.count()}')
-        self.stdout.write(f'  Total techniques: {Technique.objects.count()}')
+        self.apply_parent_relationships(technique_parent_ids)
+        version = stix_version(data)
+        self.record_import('attack', version, source, len(tactics_by_id), Technique.objects.filter(framework='attack').count())
+        return {'tactics': len(tactics_by_id), 'techniques': Technique.objects.filter(framework='attack').count()}
+
+    def attack_tactic_for_item(self, item, tactics_by_shortname):
+        for phase in item.get('kill_chain_phases', []):
+            if phase.get('kill_chain_name') == 'mitre-attack':
+                tactic = tactics_by_shortname.get(phase.get('phase_name'))
+                if tactic:
+                    return tactic
+        return None
+
+    @transaction.atomic
+    def import_atlas(self, data, source):
+        matrix = (data.get('matrices') or [{}])[0]
+        tactics_by_id = {}
+
+        for item in matrix.get('tactics', []):
+            tactic_id = item.get('id')
+            if not tactic_id:
+                continue
+
+            tactic, _created = Tactic.objects.update_or_create(
+                tactic_id=tactic_id,
+                defaults={
+                    'name': item.get('name', tactic_id),
+                    'description': item.get('description', ''),
+                    'framework': 'atlas',
+                    'url': f'https://atlas.mitre.org/tactics/{tactic_id}/',
+                },
+            )
+            tactics_by_id[tactic_id] = tactic
+
+        technique_parent_ids = {}
+        for item in matrix.get('techniques', []):
+            technique_id = item.get('id')
+            if not technique_id:
+                continue
+
+            tactic_id = (item.get('tactics') or [None])[0]
+            parent_id = item.get('specializes')
+            if tactic_id is None and parent_id:
+                parent = Technique.objects.filter(technique_id=parent_id).select_related('tactic').first()
+                tactic = parent.tactic if parent else None
+            else:
+                tactic = tactics_by_id.get(tactic_id)
+            if tactic is None:
+                continue
+
+            Technique.objects.update_or_create(
+                technique_id=technique_id,
+                defaults={
+                    'name': item.get('name', technique_id),
+                    'description': item.get('description', ''),
+                    'framework': 'atlas',
+                    'tactic': tactic,
+                    'url': f'https://atlas.mitre.org/techniques/{technique_id}/',
+                },
+            )
+            if parent_id:
+                technique_parent_ids[technique_id] = parent_id
+
+        self.apply_parent_relationships(technique_parent_ids)
+        version = str(data.get('version', ''))
+        self.record_import('atlas', version, source, len(tactics_by_id), Technique.objects.filter(framework='atlas').count())
+        return {'tactics': len(tactics_by_id), 'techniques': Technique.objects.filter(framework='atlas').count()}
+
+    def apply_parent_relationships(self, technique_parent_ids):
+        for technique_id, parent_id in technique_parent_ids.items():
+            Technique.objects.filter(technique_id=technique_id).update(
+                parent=Technique.objects.filter(technique_id=parent_id).first()
+            )
+
+    def record_import(self, framework, version, source, tactic_count, technique_count):
+        FrameworkImport.objects.update_or_create(
+            framework=framework,
+            defaults={
+                'version': version,
+                'source': source[:500],
+                'imported_at': timezone.now(),
+                'tactic_count': tactic_count,
+                'technique_count': technique_count,
+            },
+        )

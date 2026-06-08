@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Tactic, Technique
+from .models import FrameworkImport, Tactic, Technique
+
+
+@admin.register(FrameworkImport)
+class FrameworkImportAdmin(admin.ModelAdmin):
+    list_display = ['framework', 'version', 'source', 'imported_at', 'tactic_count', 'technique_count']
+    readonly_fields = ['imported_at']
 
 
 @admin.register(Tactic)

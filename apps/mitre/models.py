@@ -1,5 +1,27 @@
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
+
+
+class FrameworkImport(models.Model):
+    """Tracks imported MITRE framework dataset versions."""
+    FRAMEWORK_CHOICES = [
+        ('attack', 'MITRE ATT&CK'),
+        ('atlas', 'MITRE ATLAS'),
+    ]
+
+    framework = models.CharField(max_length=10, choices=FRAMEWORK_CHOICES, unique=True)
+    version = models.CharField(max_length=50, blank=True)
+    source = models.URLField(max_length=500, blank=True)
+    imported_at = models.DateTimeField(default=timezone.now)
+    tactic_count = models.PositiveIntegerField(default=0)
+    technique_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['framework']
+
+    def __str__(self):
+        return f"{self.get_framework_display()} {self.version}".strip()
 
 
 class Tactic(models.Model):
