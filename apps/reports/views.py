@@ -31,6 +31,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context['total_threat_models'] = ThreatModel.objects.count()
         context['total_findings'] = Finding.objects.count()
         context['published_count'] = ThreatModel.objects.filter(status='published').count()
+        today = timezone.localdate()
+        now = timezone.now()
+        current_window_start = now - timedelta(days=30)
+        previous_window_start = now - timedelta(days=60)
 
         # Risk distribution
         risk_distribution = ThreatModel.objects.filter(
@@ -56,9 +60,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         # Risk by business unit
         bu_risk = BusinessUnit.objects.annotate(
-            threat_model_count=Count('threat_models'),
+            threat_model_count=Count('threat_models', distinct=True),
+            finding_count=Count('threat_models__findings', distinct=True),
             avg_risk=Avg('threat_models__overall_risk')
-        ).filter(threat_model_count__gt=0).values('name', 'threat_model_count', 'avg_risk')
+        ).filter(threat_model_count__gt=0).values('id', 'name', 'threat_model_count', 'finding_count', 'avg_risk')
         context['bu_risk'] = list(bu_risk)
         context['bu_risk_json'] = json.dumps(list(bu_risk))
 
@@ -78,8 +83,52 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # High risk findings (inherent risk 4 or 5) without mitigation
         context['high_risk_findings'] = Finding.objects.filter(
             inherent_risk__gte=4,
-            residual_risk__isnull=True
-        ).select_related('threat_model')[:10]
+            status__in=['open', 'in_progress'],
+        ).select_related('threat_model', 'owner_user').order_by('-inherent_risk', 'due_date')[:10]
+
+        overdue_findings = Finding.objects.filter(
+            status__in=['open', 'in_progress'],
+            due_date__lt=today,
+        ).select_related('threat_model', 'owner_user').order_by('due_date')
+        accepted_risk_findings = Finding.objects.filter(
+            status='accepted'
+        ).select_related('threat_model', 'owner_user').order_by('-updated_at')
+        residual_critical_findings = Finding.objects.filter(
+            residual_risk=5,
+            status__in=['open', 'in_progress', 'mitigated', 'accepted'],
+        ).select_related('threat_model', 'owner_user').order_by('-updated_at')
+        open_findings = Finding.objects.filter(status__in=['open', 'in_progress'])
+        mitigated_findings = Finding.objects.filter(status__in=['mitigated', 'closed'])
+
+        open_ages = [
+            (now - finding.created_at).days
+            for finding in open_findings.only('created_at')
+        ]
+        risk_reductions = [
+            finding.inherent_risk - finding.residual_risk
+            for finding in mitigated_findings.exclude(residual_risk__isnull=True)
+        ]
+        current_findings_count = Finding.objects.filter(created_at__gte=current_window_start).count()
+        previous_findings_count = Finding.objects.filter(
+            created_at__gte=previous_window_start,
+            created_at__lt=current_window_start,
+        ).count()
+
+        context['open_findings_count'] = open_findings.count()
+        context['overdue_findings'] = overdue_findings[:10]
+        context['overdue_findings_count'] = overdue_findings.count()
+        context['accepted_risk_findings'] = accepted_risk_findings[:10]
+        context['accepted_risk_count'] = accepted_risk_findings.count()
+        context['residual_critical_findings'] = residual_critical_findings[:10]
+        context['residual_critical_count'] = residual_critical_findings.count()
+        context['avg_open_age_days'] = round(sum(open_ages) / len(open_ages), 1) if open_ages else 0
+        context['mitigation_effectiveness'] = (
+            round(sum(risk_reductions) / len(risk_reductions), 1)
+            if risk_reductions else 0
+        )
+        context['current_30_day_findings'] = current_findings_count
+        context['previous_30_day_findings'] = previous_findings_count
+        context['finding_trend_delta'] = current_findings_count - previous_findings_count
 
         # Trend data: Findings by business unit over last 12 months
         twelve_months_ago = timezone.now() - timedelta(days=365)

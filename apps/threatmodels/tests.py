@@ -1,9 +1,11 @@
+from datetime import timedelta
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth.models import AnonymousUser, Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import RoleMapping
 from apps.mitre.models import Tactic, Technique
@@ -215,6 +217,87 @@ class ThreatModelRiskRollupTests(TestCase):
         self.assertEqual(finding.effective_risk, 4)
         self.assertEqual(threat_model.computed_risk, 4)
         self.assertFalse(threat_model.has_risk_discrepancy)
+
+    def test_mitigated_and_accepted_findings_use_residual_risk(self):
+        threat_model = self.create_threat_model(slug='workflow-risk', overall_risk=2)
+        mitigated = Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-003-F01',
+            scenario='Mitigated issue.',
+            threat_object='Payment API',
+            stride_category='T',
+            inherent_risk=5,
+            residual_risk=2,
+            status='mitigated',
+            owner='Platform Team',
+        )
+        accepted = Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-003-F02',
+            scenario='Accepted issue.',
+            threat_object='Legacy API',
+            stride_category='I',
+            inherent_risk=4,
+            residual_risk=3,
+            status='accepted',
+            acceptance_reason='Risk accepted for legacy sunset.',
+            owner='Risk Team',
+        )
+
+        self.assertEqual(mitigated.effective_risk, 2)
+        self.assertEqual(accepted.effective_risk, 3)
+        self.assertEqual(threat_model.computed_risk, 3)
+
+    def test_open_finding_due_date_identifies_overdue_work(self):
+        threat_model = self.create_threat_model(slug='overdue-finding')
+        finding = Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-004-F01',
+            scenario='Open overdue issue.',
+            threat_object='Payment API',
+            stride_category='D',
+            inherent_risk=4,
+            due_date=timezone.localdate() - timedelta(days=1),
+            owner='Platform Team',
+        )
+
+        self.assertTrue(finding.is_open)
+        self.assertTrue(finding.is_overdue)
+
+    def test_closed_finding_sets_and_clears_closed_timestamp(self):
+        threat_model = self.create_threat_model(slug='closed-finding')
+        finding = Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-005-F01',
+            scenario='Closed issue.',
+            threat_object='Payment API',
+            stride_category='S',
+            inherent_risk=3,
+            status='closed',
+            resolution='Compensating control deployed.',
+            owner='Platform Team',
+        )
+
+        self.assertIsNotNone(finding.closed_at)
+
+        finding.status = 'open'
+        finding.save()
+        self.assertIsNone(finding.closed_at)
+
+    def test_workflow_owner_prefers_assigned_user(self):
+        threat_model = self.create_threat_model(slug='assigned-owner')
+        finding = Finding.objects.create(
+            threat_model=threat_model,
+            threat_id='TM-006-F01',
+            scenario='Assigned issue.',
+            threat_object='Payment API',
+            stride_category='E',
+            inherent_risk=3,
+            owner='Legacy Owner Text',
+            owner_user=self.owner,
+        )
+
+        self.assertEqual(finding.workflow_owner, 'owner')
 
     def test_threat_model_without_findings_has_no_computed_risk(self):
         threat_model = self.create_threat_model(slug='no-findings', overall_risk=3)
@@ -580,6 +663,7 @@ class ThreatModelPostWorkflowTests(TestCase):
 
     def test_owner_can_update_finding(self):
         self.client.force_login(self.owner)
+        due_date = timezone.localdate() + timedelta(days=14)
 
         response = self.client.post(
             reverse('threatmodels:finding_edit', kwargs={'slug': self.threat_model.slug, 'pk': self.finding.pk}),
@@ -592,6 +676,12 @@ class ThreatModelPostWorkflowTests(TestCase):
                 'residual_risk': 2,
                 'mitigations': 'Add authorization checks.',
                 'owner': 'API Security Team',
+                'owner_user': self.owner.pk,
+                'status': 'closed',
+                'due_date': due_date.isoformat(),
+                'resolution': 'Authorization checks deployed.',
+                'acceptance_reason': '',
+                'verifier': self.owner.pk,
             },
         )
 
@@ -599,6 +689,12 @@ class ThreatModelPostWorkflowTests(TestCase):
         self.assertRedirects(response, self.threat_model.get_absolute_url())
         self.assertEqual(self.finding.scenario, 'Updated scenario.')
         self.assertEqual(self.finding.residual_risk, 2)
+        self.assertEqual(self.finding.owner_user, self.owner)
+        self.assertEqual(self.finding.status, 'closed')
+        self.assertEqual(self.finding.due_date, due_date)
+        self.assertEqual(self.finding.resolution, 'Authorization checks deployed.')
+        self.assertEqual(self.finding.verifier, self.owner)
+        self.assertIsNotNone(self.finding.closed_at)
 
     def test_owner_can_upload_diagram(self):
         self.client.force_login(self.owner)

@@ -24,12 +24,24 @@ class FindingForm(forms.ModelForm):
         fields = [
             'threat_id', 'scenario', 'threat_object', 'mitre_technique',
             'threat_catalog_rating', 'stride_category', 'inherent_risk',
-            'residual_risk', 'mitigations', 'owner'
+            'residual_risk', 'mitigations', 'owner', 'owner_user',
+            'status', 'due_date', 'resolution', 'acceptance_reason', 'verifier'
         ]
         widgets = {
             'scenario': forms.Textarea(attrs={'rows': 3}),
             'mitigations': forms.Textarea(attrs={'rows': 4}),
+            'due_date': forms.DateInput(attrs={'type': 'date'}),
+            'resolution': forms.Textarea(attrs={'rows': 3}),
+            'acceptance_reason': forms.Textarea(attrs={'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['status'].required = False
+        self.fields['status'].initial = 'open'
+
+    def clean_status(self):
+        return self.cleaned_data.get('status') or 'open'
 
 
 class DiagramForm(forms.ModelForm):

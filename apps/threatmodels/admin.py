@@ -10,7 +10,10 @@ class DiagramInline(admin.TabularInline):
 class FindingInline(admin.TabularInline):
     model = Finding
     extra = 0
-    fields = ['threat_id', 'threat_object', 'stride_category', 'inherent_risk', 'residual_risk', 'owner']
+    fields = [
+        'threat_id', 'threat_object', 'status', 'due_date',
+        'stride_category', 'inherent_risk', 'residual_risk', 'owner', 'owner_user'
+    ]
     readonly_fields = ['threat_id']
 
 
@@ -48,10 +51,13 @@ class DiagramAdmin(admin.ModelAdmin):
 
 @admin.register(Finding)
 class FindingAdmin(admin.ModelAdmin):
-    list_display = ['threat_id', 'threat_object', 'threat_model', 'stride_category', 'inherent_risk', 'residual_risk']
-    list_filter = ['stride_category', 'inherent_risk', 'residual_risk', 'threat_catalog_rating']
+    list_display = [
+        'threat_id', 'threat_object', 'threat_model', 'status',
+        'due_date', 'stride_category', 'inherent_risk', 'residual_risk'
+    ]
+    list_filter = ['status', 'due_date', 'stride_category', 'inherent_risk', 'residual_risk', 'threat_catalog_rating']
     search_fields = ['threat_id', 'scenario', 'threat_object', 'mitigations']
-    raw_id_fields = ['threat_model', 'mitre_technique']
+    raw_id_fields = ['threat_model', 'mitre_technique', 'owner_user', 'verifier']
     inlines = [EvidenceInline]
 
 

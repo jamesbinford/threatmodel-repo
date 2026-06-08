@@ -166,6 +166,8 @@
                         <th>STRIDE</th>
                         <th>MITRE</th>
                         <th>Likelihood</th>
+                        <th>Status</th>
+                        <th>Due</th>
                         <th>Inherent Risk</th>
                         <th>Residual Risk</th>
                         {% if can_edit_threat_model %}<th>Actions</th>{% endif %}
@@ -187,6 +189,13 @@
                             {% endif %}
                         </td>
                         <td>{{ finding.get_threat_catalog_rating_display|default:"-" }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ finding.get_status_display }}</span>
+                            {% if finding.is_overdue %}
+                            <span class="badge bg-danger">Overdue</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ finding.due_date|date:"M d, Y"|default:"-" }}</td>
                         <td><span class="badge risk-badge-{{ finding.inherent_risk }}">{{ finding.inherent_risk_label }}</span></td>
                         <td>
                             {% if finding.residual_risk %}
@@ -209,10 +218,23 @@
                         {% endif %}
                     </tr>
                     <tr>
-                        <td colspan="{% if can_edit_threat_model %}8{% else %}7{% endif %}" class="bg-light">
+                        <td colspan="{% if can_edit_threat_model %}10{% else %}9{% endif %}" class="bg-light">
                             <strong>Scenario:</strong> {{ finding.scenario }}
+                            <br><strong>Owner:</strong> {{ finding.workflow_owner }}
                             {% if finding.mitigations %}
                             <br><strong>Mitigations:</strong> {{ finding.mitigations|linebreaks }}
+                            {% endif %}
+                            {% if finding.resolution %}
+                            <strong>Resolution:</strong> {{ finding.resolution|linebreaks }}
+                            {% endif %}
+                            {% if finding.acceptance_reason %}
+                            <strong>Acceptance:</strong> {{ finding.acceptance_reason|linebreaks }}
+                            {% endif %}
+                            {% if finding.verifier %}
+                            <strong>Verifier:</strong> {{ finding.verifier.username }}
+                            {% endif %}
+                            {% if finding.closed_at %}
+                            <br><strong>Closed:</strong> {{ finding.closed_at|date:"M d, Y H:i" }}
                             {% endif %}
                             {% with evidence_items=finding.evidence.all %}
                             {% if evidence_items %}

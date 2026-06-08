@@ -1,6 +1,7 @@
 from django.db import models
 from django.urls import reverse
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 from .upload_validation import is_previewable_image
 
@@ -126,6 +127,13 @@ class Finding(models.Model):
         ('unlikely', 'Unlikely'),
         ('rare', 'Rare'),
     ]
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('mitigated', 'Mitigated'),
+        ('accepted', 'Accepted Risk'),
+        ('closed', 'Closed'),
+    ]
 
     threat_model = models.ForeignKey(
         ThreatModel,
@@ -152,6 +160,25 @@ class Finding(models.Model):
     residual_risk = models.IntegerField(choices=RISK_CHOICES, null=True, blank=True)
     mitigations = models.TextField(blank=True)
     owner = models.CharField(max_length=200)
+    owner_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_findings'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    due_date = models.DateField(null=True, blank=True)
+    resolution = models.TextField(blank=True)
+    acceptance_reason = models.TextField(blank=True)
+    verifier = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='findings_to_verify'
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -160,6 +187,13 @@ class Finding(models.Model):
 
     def __str__(self):
         return f"{self.threat_id}: {self.threat_object}"
+
+    def save(self, *args, **kwargs):
+        if self.status == 'closed' and self.closed_at is None:
+            self.closed_at = timezone.now()
+        elif self.status != 'closed':
+            self.closed_at = None
+        super().save(*args, **kwargs)
 
     @property
     def inherent_risk_label(self):
@@ -171,6 +205,10 @@ class Finding(models.Model):
 
     @property
     def effective_risk(self):
+        if self.status == 'accepted':
+            return self.residual_risk or self.inherent_risk
+        if self.status in ['mitigated', 'closed'] and self.residual_risk is not None:
+            return self.residual_risk
         if self.residual_risk is not None and self.mitigations.strip():
             return self.residual_risk
         return self.inherent_risk
@@ -178,6 +216,20 @@ class Finding(models.Model):
     @property
     def effective_risk_label(self):
         return ThreatModel.risk_label_for(self.effective_risk)
+
+    @property
+    def is_open(self):
+        return self.status in ['open', 'in_progress']
+
+    @property
+    def is_overdue(self):
+        return self.is_open and self.due_date is not None and self.due_date < timezone.localdate()
+
+    @property
+    def workflow_owner(self):
+        if self.owner_user:
+            return self.owner_user.get_full_name() or self.owner_user.username
+        return self.owner
 
     @property
     def stride_label(self):

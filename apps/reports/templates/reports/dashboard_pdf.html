@@ -98,6 +98,32 @@
         </div>
     </div>
 
+    <h2>Executive Summary</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Open Findings</th>
+                <th>Overdue</th>
+                <th>Accepted Risk</th>
+                <th>Residual Critical</th>
+                <th>Avg Open Age Days</th>
+                <th>Avg Risk Reduction</th>
+                <th>30-Day Delta</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ open_findings_count }}</td>
+                <td>{{ overdue_findings_count }}</td>
+                <td>{{ accepted_risk_count }}</td>
+                <td>{{ residual_critical_count }}</td>
+                <td>{{ avg_open_age_days }}</td>
+                <td>{{ mitigation_effectiveness }}</td>
+                <td>{{ finding_trend_delta }}</td>
+            </tr>
+        </tbody>
+    </table>
+
     <h2>Risk Distribution</h2>
     <table>
         <thead>
@@ -173,6 +199,7 @@
             <tr>
                 <th>Business Unit</th>
                 <th>Threat Models</th>
+                <th>Findings</th>
                 <th>Average Risk</th>
             </tr>
         </thead>
@@ -181,10 +208,11 @@
             <tr>
                 <td>{{ item.name }}</td>
                 <td>{{ item.threat_model_count }}</td>
+                <td>{{ item.finding_count }}</td>
                 <td>{{ item.avg_risk|floatformat:1|default:"-" }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="3">No business unit data available</td></tr>
+            <tr><td colspan="4">No business unit data available</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -218,7 +246,7 @@
     </table>
 
     {% if high_risk_findings %}
-    <h2>High Risk Findings Requiring Mitigation</h2>
+    <h2>High Risk Open Findings</h2>
     <table>
         <thead>
             <tr>
@@ -226,6 +254,8 @@
                 <th>Threat Object</th>
                 <th>Threat Model</th>
                 <th>Risk</th>
+                <th>Status</th>
+                <th>Due</th>
                 <th>Owner</th>
             </tr>
         </thead>
@@ -236,7 +266,35 @@
                 <td>{{ finding.threat_object }}</td>
                 <td>{{ finding.threat_model.title }}</td>
                 <td><span class="badge risk-{{ finding.inherent_risk }}">{{ finding.inherent_risk_label }}</span></td>
-                <td>{{ finding.owner }}</td>
+                <td>{{ finding.get_status_display }}</td>
+                <td>{{ finding.due_date|date:"M d, Y"|default:"-" }}</td>
+                <td>{{ finding.workflow_owner }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if overdue_findings %}
+    <h2>Overdue Remediation</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Finding ID</th>
+                <th>Threat Object</th>
+                <th>Threat Model</th>
+                <th>Due</th>
+                <th>Owner</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for finding in overdue_findings %}
+            <tr>
+                <td>{{ finding.threat_id }}</td>
+                <td>{{ finding.threat_object }}</td>
+                <td>{{ finding.threat_model.title }}</td>
+                <td>{{ finding.due_date|date:"M d, Y" }}</td>
+                <td>{{ finding.workflow_owner }}</td>
             </tr>
             {% endfor %}
         </tbody>

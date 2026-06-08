@@ -1,10 +1,12 @@
 import json
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.mitre.models import Tactic, Technique
 from apps.organization.models import BusinessUnit
@@ -58,7 +60,7 @@ class ReportViewTests(TestCase):
             owner=cls.user,
         )
         cls.draft_tm.tags.add(cls.api_tag)
-        Finding.objects.create(
+        cls.high_risk_finding = Finding.objects.create(
             threat_model=cls.published_tm,
             threat_id='TM-001-F01',
             scenario='Phishing attack.',
@@ -66,9 +68,10 @@ class ReportViewTests(TestCase):
             mitre_technique=cls.technique,
             stride_category='S',
             inherent_risk=4,
+            due_date=timezone.localdate() - timedelta(days=1),
             owner='Mobile Security Team',
         )
-        Finding.objects.create(
+        cls.mitigated_finding = Finding.objects.create(
             threat_model=cls.published_tm,
             threat_id='TM-001-F02',
             scenario='Logging sensitive data.',
@@ -76,6 +79,8 @@ class ReportViewTests(TestCase):
             stride_category='I',
             inherent_risk=3,
             residual_risk=1,
+            status='mitigated',
+            mitigations='Mask log fields.',
             owner='Platform Team',
         )
 
@@ -91,6 +96,41 @@ class ReportViewTests(TestCase):
         self.assertEqual(response.context['published_count'], 1)
         self.assertEqual(len(response.context['high_risk_findings']), 1)
         self.assertEqual(response.context['top_techniques'][0], self.technique)
+
+    def test_dashboard_context_includes_actionable_risk_metrics(self):
+        Finding.objects.create(
+            threat_model=self.draft_tm,
+            threat_id='TM-002-F01',
+            scenario='Accepted legacy risk.',
+            threat_object='Legacy payment API',
+            stride_category='I',
+            inherent_risk=5,
+            residual_risk=5,
+            status='accepted',
+            acceptance_reason='Accepted until replacement launch.',
+            owner='Risk Team',
+        )
+
+        response = self.client.get(reverse('reports:dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['open_findings_count'], 1)
+        self.assertEqual(response.context['overdue_findings_count'], 1)
+        self.assertEqual(list(response.context['overdue_findings']), [self.high_risk_finding])
+        self.assertEqual(response.context['accepted_risk_count'], 1)
+        self.assertEqual(response.context['residual_critical_count'], 1)
+        self.assertEqual(response.context['mitigation_effectiveness'], 2.0)
+        self.assertGreaterEqual(response.context['avg_open_age_days'], 0)
+        self.assertIn('finding_trend_delta', response.context)
+
+    def test_dashboard_context_includes_business_unit_drill_down_counts(self):
+        response = self.client.get(reverse('reports:dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        digital_banking = next(item for item in response.context['bu_risk'] if item['name'] == 'Digital Banking')
+        self.assertEqual(digital_banking['id'], self.child_bu.id)
+        self.assertEqual(digital_banking['threat_model_count'], 1)
+        self.assertEqual(digital_banking['finding_count'], 2)
 
     def test_dashboard_context_includes_computed_risk_recommendations(self):
         self.published_tm.overall_risk = 2
