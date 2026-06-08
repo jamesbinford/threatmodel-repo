@@ -81,6 +81,20 @@ if env_bool(os.environ, 'SECURE_PROXY_SSL_HEADER_ENABLED', default=False):
 
 UPLOAD_MALWARE_SCANNER = os.environ.get('UPLOAD_MALWARE_SCANNER') or None
 
+ENTRA_TENANT_ID = os.environ.get('ENTRA_TENANT_ID', '')
+ENTRA_ISSUER = os.environ.get('ENTRA_ISSUER') or (
+    f'https://login.microsoftonline.com/{ENTRA_TENANT_ID}/v2.0' if ENTRA_TENANT_ID else ''
+)
+ENTRA_AUDIENCE = os.environ.get('ENTRA_AUDIENCE', '')
+ENTRA_JWKS_URL = os.environ.get('ENTRA_JWKS_URL') or (
+    f'https://login.microsoftonline.com/{ENTRA_TENANT_ID}/discovery/v2.0/keys' if ENTRA_TENANT_ID else ''
+)
+ENTRA_REQUIRED_ROLES = [
+    role.strip()
+    for role in os.environ.get('ENTRA_REQUIRED_ROLES', 'ThreatModel.Submit,ThreatModel.Admin').split(',')
+    if role.strip()
+]
+
 # Logging
 LOGGING = {
     'version': 1,

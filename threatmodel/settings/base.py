@@ -114,3 +114,10 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
+# Microsoft Entra authentication for internal API clients.
+ENTRA_TENANT_ID = ''
+ENTRA_ISSUER = ''
+ENTRA_AUDIENCE = ''
+ENTRA_JWKS_URL = ''
+ENTRA_REQUIRED_ROLES = ['ThreatModel.Submit', 'ThreatModel.Admin']
