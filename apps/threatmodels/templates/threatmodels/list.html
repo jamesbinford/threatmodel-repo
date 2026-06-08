@@ -18,6 +18,10 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Search</label>
+                <input type="search" name="q" class="form-control" value="{{ request.GET.q }}" placeholder="Title, finding, tag, MITRE, owner">
+            </div>
             <div class="col-md-3">
                 <label class="form-label">Status</label>
                 <select name="status" class="form-select">
@@ -36,9 +40,48 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Business Unit</label>
+                <select name="business_unit" class="form-select">
+                    <option value="">All</option>
+                    {% for business_unit in business_units %}
+                    <option value="{{ business_unit.pk }}" {% if request.GET.business_unit == business_unit.pk|stringformat:"d" %}selected{% endif %}>{{ business_unit.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Technology Tag</label>
+                <select name="tag" class="form-select">
+                    <option value="">All</option>
+                    {% for tag in technology_tags %}
+                    <option value="{{ tag.pk }}" {% if request.GET.tag == tag.pk|stringformat:"d" %}selected{% endif %}>{{ tag.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Owner</label>
+                <select name="owner" class="form-select">
+                    <option value="">All</option>
+                    {% for owner in owners %}
+                    <option value="{{ owner.pk }}" {% if request.GET.owner == owner.pk|stringformat:"d" %}selected{% endif %}>{{ owner.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">MITRE Technique</label>
+                <select name="mitre" class="form-select">
+                    <option value="">All</option>
+                    {% for technique in mitre_techniques %}
+                    <option value="{{ technique.pk }}" {% if request.GET.mitre == technique.pk|stringformat:"d" %}selected{% endif %}>{{ technique.technique_id }} - {{ technique.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary">Filter</button>
                 <a href="{% url 'threatmodels:list' %}" class="btn btn-outline-primary ms-2">Clear</a>
+                <a href="?{{ export_querystring }}" class="btn btn-outline-secondary ms-2">
+                    <i class="bi bi-download"></i> Export CSV
+                </a>
             </div>
         </form>
     </div>
@@ -74,7 +117,7 @@
                         <span class="text-muted">-</span>
                         {% endif %}
                     </td>
-                    <td>{{ tm.findings.count }}</td>
+                    <td>{{ tm.finding_count }}</td>
                     <td>{{ tm.owner.username }}</td>
                     <td>{{ tm.updated_at|date:"M d, Y" }}</td>
                 </tr>
@@ -90,7 +133,7 @@
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
         <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+            <a class="page-link" href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
         </li>
         {% endif %}
         <li class="page-item disabled">
@@ -98,7 +141,7 @@
         </li>
         {% if page_obj.has_next %}
         <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+            <a class="page-link" href="?{% if filter_querystring %}{{ filter_querystring }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a>
         </li>
         {% endif %}
     </ul>

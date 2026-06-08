@@ -6,9 +6,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from apps.accounts.models import RoleMapping
+from apps.mitre.models import Tactic, Technique
 from apps.organization.models import BusinessUnit
 from .forms import DiagramForm, EvidenceForm, FindingForm, ThreatModelForm
-from .models import Diagram, Evidence, Finding, ThreatModel
+from .models import Diagram, Evidence, Finding, TechnologyTag, ThreatModel
 from .policies import (
     can_create_threat_model,
     can_edit_threat_model,
@@ -459,6 +460,22 @@ class ThreatModelPostWorkflowTests(TestCase):
         cls.owner = User.objects.create_user(username='owner', password='pass12345')
         cls.other_user = User.objects.create_user(username='other', password='pass12345')
         cls.business_unit = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.tactic = Tactic.objects.create(
+            tactic_id='TA0001',
+            name='Initial Access',
+            description='Initial access tactic.',
+            framework='attack',
+            url='https://attack.mitre.org/tactics/TA0001/',
+        )
+        cls.technique = Technique.objects.create(
+            technique_id='T1566',
+            name='Phishing',
+            description='Phishing technique.',
+            framework='attack',
+            tactic=cls.tactic,
+            url='https://attack.mitre.org/techniques/T1566/',
+        )
+        cls.api_tag = TechnologyTag.objects.create(name='API', slug='api')
         cls.threat_model = ThreatModel.objects.create(
             title='Payment Gateway',
             slug='payment-gateway',
@@ -468,11 +485,22 @@ class ThreatModelPostWorkflowTests(TestCase):
             owner=cls.owner,
             status='draft',
         )
+        cls.threat_model.tags.add(cls.api_tag)
+        cls.other_threat_model = ThreatModel.objects.create(
+            title='Lending Platform',
+            slug='lending-platform',
+            business_unit=cls.business_unit,
+            description='Lending platform threat model.',
+            overall_risk=1,
+            owner=cls.other_user,
+            status='published',
+        )
         cls.finding = Finding.objects.create(
             threat_model=cls.threat_model,
             threat_id='TM-001-F01',
             scenario='An attacker abuses weak authorization.',
             threat_object='Payment API',
+            mitre_technique=cls.technique,
             stride_category='E',
             inherent_risk=4,
             owner='API Security Team',
@@ -653,6 +681,54 @@ class ThreatModelPostWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context['threat_models']), [self.threat_model])
+
+    def test_threat_model_list_searches_finding_and_mitre_fields(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('threatmodels:list'), {'q': 'Phishing'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context['threat_models']), [self.threat_model])
+
+    def test_threat_model_list_filters_by_tag_owner_and_mitre(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('threatmodels:list'), {
+            'tag': self.api_tag.pk,
+            'owner': self.owner.pk,
+            'mitre': self.technique.pk,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context['threat_models']), [self.threat_model])
+
+    def test_threat_model_list_preserves_filters_in_pagination_links(self):
+        self.client.force_login(self.owner)
+        for index in range(21):
+            ThreatModel.objects.create(
+                title=f'API Threat Model {index}',
+                slug=f'api-threat-model-{index}',
+                business_unit=self.business_unit,
+                description='Additional API threat model.',
+                owner=self.owner,
+                status='draft',
+            )
+
+        response = self.client.get(reverse('threatmodels:list'), {'q': 'API', 'status': 'draft'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'q=API&amp;status=draft&amp;page=2')
+
+    def test_threat_model_csv_export_respects_filters(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('threatmodels:list'), {'q': 'Payment Gateway', 'export': 'csv'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        content = response.content.decode()
+        self.assertIn('Payment Gateway', content)
+        self.assertNotIn('Lending Platform', content)
 
     def test_create_threat_model_initializes_business_unit_from_query_string(self):
         self.client.force_login(self.owner)

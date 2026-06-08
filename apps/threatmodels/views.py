@@ -1,9 +1,17 @@
+import csv
+
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
+from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.urls import reverse
 from django.utils.text import slugify
 from django.shortcuts import get_object_or_404
+from apps.mitre.models import Technique
+from apps.organization.models import BusinessUnit
 from .models import ThreatModel, Finding, Diagram, Evidence
+from .models import TechnologyTag
 from .forms import ThreatModelForm, FindingForm, DiagramForm, EvidenceForm
 from .mixins import ThreatModelEditRequiredMixin
 from .policies import can_edit_threat_model
@@ -16,19 +24,105 @@ class ThreatModelListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        queryset = ThreatModel.objects.select_related('business_unit', 'owner')
+        queryset = ThreatModel.objects.select_related(
+            'business_unit', 'owner'
+        ).prefetch_related('tags').annotate(
+            finding_count=Count('findings', distinct=True)
+        )
+        query = self.request.GET.get('q', '').strip()
         status = self.request.GET.get('status')
         risk = self.request.GET.get('risk')
         bu = self.request.GET.get('business_unit')
+        tag = self.request.GET.get('tag')
+        owner = self.request.GET.get('owner')
+        mitre = self.request.GET.get('mitre')
 
+        if query:
+            queryset = queryset.filter(
+                Q(title__icontains=query)
+                | Q(description__icontains=query)
+                | Q(business_unit__name__icontains=query)
+                | Q(owner__username__icontains=query)
+                | Q(owner__first_name__icontains=query)
+                | Q(owner__last_name__icontains=query)
+                | Q(owner__email__icontains=query)
+                | Q(tags__name__icontains=query)
+                | Q(findings__threat_id__icontains=query)
+                | Q(findings__scenario__icontains=query)
+                | Q(findings__threat_object__icontains=query)
+                | Q(findings__mitigations__icontains=query)
+                | Q(findings__owner__icontains=query)
+                | Q(findings__mitre_technique__technique_id__icontains=query)
+                | Q(findings__mitre_technique__name__icontains=query)
+            )
         if status:
             queryset = queryset.filter(status=status)
         if risk:
             queryset = queryset.filter(overall_risk=risk)
         if bu:
             queryset = queryset.filter(business_unit_id=bu)
+        if tag:
+            queryset = queryset.filter(tags__id=tag)
+        if owner:
+            queryset = queryset.filter(owner_id=owner)
+        if mitre:
+            queryset = queryset.filter(findings__mitre_technique_id=mitre)
 
-        return queryset
+        return queryset.distinct().order_by('-updated_at')
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get('export') == 'csv':
+            return self.get_csv_response(self.get_queryset())
+        return super().get(request, *args, **kwargs)
+
+    def get_csv_response(self, queryset):
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="threat-models.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            'Title',
+            'Business Unit',
+            'Status',
+            'Manual Risk',
+            'Computed Risk',
+            'Finding Count',
+            'Owner',
+            'Tags',
+            'Updated At',
+        ])
+        for threat_model in queryset:
+            writer.writerow([
+                threat_model.title,
+                threat_model.business_unit.name,
+                threat_model.get_status_display(),
+                threat_model.risk_label,
+                threat_model.computed_risk_label,
+                threat_model.finding_count,
+                threat_model.owner.username,
+                ', '.join(tag.name for tag in threat_model.tags.all()),
+                threat_model.updated_at.isoformat(),
+            ])
+        return response
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        query_params = self.request.GET.copy()
+        query_params.pop('page', None)
+        query_params.pop('export', None)
+        context['filter_querystring'] = query_params.urlencode()
+        export_params = query_params.copy()
+        export_params['export'] = 'csv'
+        context['export_querystring'] = export_params.urlencode()
+        context['risk_choices'] = ThreatModel.RISK_CHOICES
+        context['business_units'] = BusinessUnit.objects.all()
+        context['technology_tags'] = TechnologyTag.objects.all()
+        context['owners'] = User.objects.filter(
+            owned_threat_models__isnull=False
+        ).distinct().order_by('username')
+        context['mitre_techniques'] = Technique.objects.filter(
+            findings__isnull=False
+        ).distinct().order_by('technique_id')
+        return context
 
 
 class ThreatModelDetailView(LoginRequiredMixin, DetailView):
