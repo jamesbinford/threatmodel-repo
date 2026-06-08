@@ -1,5 +1,5 @@
 from django import forms
-from .models import ThreatModel, Finding, Diagram
+from .models import ThreatModel, Finding, Diagram, Evidence
 from .upload_validation import validate_upload_file
 
 
@@ -36,6 +36,19 @@ class DiagramForm(forms.ModelForm):
     class Meta:
         model = Diagram
         fields = ['title', 'diagram_type', 'file', 'description']
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def clean_file(self):
+        file = self.cleaned_data.get('file')
+        return validate_upload_file(file)
+
+
+class EvidenceForm(forms.ModelForm):
+    class Meta:
+        model = Evidence
+        fields = ['title', 'description', 'file']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
         }

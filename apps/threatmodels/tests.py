@@ -7,8 +7,8 @@ from django.urls import reverse
 
 from apps.accounts.models import RoleMapping
 from apps.organization.models import BusinessUnit
-from .forms import DiagramForm, FindingForm, ThreatModelForm
-from .models import Diagram, Finding, ThreatModel
+from .forms import DiagramForm, EvidenceForm, FindingForm, ThreatModelForm
+from .models import Diagram, Evidence, Finding, ThreatModel
 from .policies import (
     can_create_threat_model,
     can_edit_threat_model,
@@ -278,6 +278,7 @@ class ThreatModelAuthorizationViewTests(TestCase):
             reverse('threatmodels:edit', kwargs={'slug': self.threat_model.slug}),
             reverse('threatmodels:finding_add', kwargs={'slug': self.threat_model.slug}),
             reverse('threatmodels:finding_edit', kwargs={'slug': self.threat_model.slug, 'pk': self.finding.pk}),
+            reverse('threatmodels:evidence_upload', kwargs={'slug': self.threat_model.slug, 'finding_pk': self.finding.pk}),
             reverse('threatmodels:diagram_upload', kwargs={'slug': self.threat_model.slug}),
             reverse('threatmodels:diagram_edit', kwargs={'slug': self.threat_model.slug, 'pk': self.diagram.pk}),
             reverse('threatmodels:diagram_delete', kwargs={'slug': self.threat_model.slug, 'pk': self.diagram.pk}),
@@ -312,6 +313,7 @@ class ThreatModelAuthorizationViewTests(TestCase):
             reverse('threatmodels:edit', kwargs={'slug': self.threat_model.slug}),
             reverse('threatmodels:finding_add', kwargs={'slug': self.threat_model.slug}),
             reverse('threatmodels:finding_edit', kwargs={'slug': self.threat_model.slug, 'pk': self.finding.pk}),
+            reverse('threatmodels:evidence_upload', kwargs={'slug': self.threat_model.slug, 'finding_pk': self.finding.pk}),
             reverse('threatmodels:diagram_upload', kwargs={'slug': self.threat_model.slug}),
             reverse('threatmodels:diagram_edit', kwargs={'slug': self.threat_model.slug, 'pk': self.diagram.pk}),
             reverse('threatmodels:diagram_delete', kwargs={'slug': self.threat_model.slug, 'pk': self.diagram.pk}),
@@ -436,6 +438,19 @@ class ThreatModelFormTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('file', form.errors)
+
+    def test_evidence_form_uses_upload_validation(self):
+        upload = SimpleUploadedFile('evidence.exe', b'not evidence')
+        form = EvidenceForm(data={'title': 'Bad Evidence', 'description': ''}, files={'file': upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('file', form.errors)
+
+    def test_evidence_form_accepts_supported_files_with_matching_content(self):
+        upload = SimpleUploadedFile('evidence.pdf', PDF_BYTES, content_type='application/pdf')
+        form = EvidenceForm(data={'title': 'Mitigation Evidence', 'description': ''}, files={'file': upload})
+
+        self.assertTrue(form.is_valid(), form.errors)
 
 
 class ThreatModelPostWorkflowTests(TestCase):
@@ -572,6 +587,60 @@ class ThreatModelPostWorkflowTests(TestCase):
 
         self.assertRedirects(response, self.threat_model.get_absolute_url())
         self.assertTrue(self.threat_model.diagrams.filter(title='Architecture').exists())
+
+    def test_owner_can_upload_evidence_for_finding(self):
+        self.client.force_login(self.owner)
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            response = self.client.post(
+                reverse(
+                    'threatmodels:evidence_upload',
+                    kwargs={'slug': self.threat_model.slug, 'finding_pk': self.finding.pk},
+                ),
+                data={
+                    'title': 'Remediation Screenshot',
+                    'description': 'Screenshot showing the fix.',
+                    'file': SimpleUploadedFile('evidence.png', PNG_BYTES, content_type='image/png'),
+                },
+            )
+
+        evidence = Evidence.objects.get(title='Remediation Screenshot')
+        self.assertRedirects(response, self.threat_model.get_absolute_url())
+        self.assertEqual(evidence.finding, self.finding)
+        self.assertEqual(evidence.uploaded_by, self.owner)
+
+    def test_non_owner_cannot_upload_evidence_with_post(self):
+        self.client.force_login(self.other_user)
+
+        response = self.client.post(
+            reverse(
+                'threatmodels:evidence_upload',
+                kwargs={'slug': self.threat_model.slug, 'finding_pk': self.finding.pk},
+            ),
+            data={
+                'title': 'Unauthorized Evidence',
+                'description': '',
+                'file': SimpleUploadedFile('evidence.png', PNG_BYTES, content_type='image/png'),
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Evidence.objects.filter(title='Unauthorized Evidence').exists())
+
+    def test_threat_model_detail_lists_finding_evidence(self):
+        Evidence.objects.create(
+            finding=self.finding,
+            title='Remediation Screenshot',
+            description='Screenshot showing the fix.',
+            file='evidence/remediation.png',
+            uploaded_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('threatmodels:detail', kwargs={'slug': self.threat_model.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Remediation Screenshot')
+        self.assertContains(response, 'Screenshot showing the fix.')
 
     def test_threat_model_list_filters_by_status_risk_and_business_unit(self):
         self.client.force_login(self.owner)

@@ -197,9 +197,14 @@
                         </td>
                         {% if can_edit_threat_model %}
                         <td>
-                            <a href="{% url 'threatmodels:finding_edit' threat_model.slug finding.pk %}" class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-pencil"></i>
-                            </a>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'threatmodels:finding_edit' threat_model.slug finding.pk %}" class="btn btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'threatmodels:evidence_upload' threat_model.slug finding.pk %}" class="btn btn-outline-primary" title="Upload Evidence">
+                                    <i class="bi bi-upload"></i>
+                                </a>
+                            </div>
                         </td>
                         {% endif %}
                     </tr>
@@ -209,6 +214,32 @@
                             {% if finding.mitigations %}
                             <br><strong>Mitigations:</strong> {{ finding.mitigations|linebreaks }}
                             {% endif %}
+                            {% with evidence_items=finding.evidence.all %}
+                            {% if evidence_items %}
+                            <div class="mt-3">
+                                <strong>Evidence:</strong>
+                                <ul class="mb-0">
+                                    {% for evidence in evidence_items %}
+                                    <li>
+                                        <a href="{{ evidence.file.url }}" target="_blank" rel="noopener">{{ evidence.title }}</a>
+                                        <span class="text-muted small">
+                                            uploaded by {{ evidence.uploaded_by.username }} on {{ evidence.uploaded_at|date:"M d, Y" }}
+                                        </span>
+                                        {% if evidence.description %}
+                                        <div class="small text-muted">{{ evidence.description }}</div>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% elif can_edit_threat_model %}
+                            <div class="mt-3">
+                                <a href="{% url 'threatmodels:evidence_upload' threat_model.slug finding.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-upload"></i> Upload Evidence
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% endwith %}
                         </td>
                     </tr>
                     {% endfor %}

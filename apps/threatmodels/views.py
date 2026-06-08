@@ -2,8 +2,9 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse
 from django.utils.text import slugify
-from .models import ThreatModel, Finding, Diagram
-from .forms import ThreatModelForm, FindingForm, DiagramForm
+from django.shortcuts import get_object_or_404
+from .models import ThreatModel, Finding, Diagram, Evidence
+from .forms import ThreatModelForm, FindingForm, DiagramForm, EvidenceForm
 from .mixins import ThreatModelEditRequiredMixin
 from .policies import can_edit_threat_model
 
@@ -38,7 +39,9 @@ class ThreatModelDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['findings'] = self.object.findings.select_related('mitre_technique')
+        context['findings'] = self.object.findings.select_related(
+            'mitre_technique'
+        ).prefetch_related('evidence__uploaded_by')
         context['diagrams'] = self.object.diagrams.all()
         context['can_edit_threat_model'] = can_edit_threat_model(self.request.user, self.object)
         return context
@@ -145,3 +148,31 @@ class DiagramDeleteView(LoginRequiredMixin, ThreatModelEditRequiredMixin, Delete
 
     def get_success_url(self):
         return reverse('threatmodels:detail', kwargs={'slug': self.object.threat_model.slug})
+
+
+class EvidenceUploadView(LoginRequiredMixin, ThreatModelEditRequiredMixin, CreateView):
+    model = Evidence
+    form_class = EvidenceForm
+    template_name = 'threatmodels/evidence_form.html'
+
+    def get_permission_threat_model(self):
+        self.finding = get_object_or_404(
+            Finding.objects.select_related('threat_model'),
+            pk=self.kwargs['finding_pk'],
+            threat_model__slug=self.kwargs['slug'],
+        )
+        return self.finding.threat_model
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['threat_model'] = self.threat_model
+        context['finding'] = self.finding
+        return context
+
+    def form_valid(self, form):
+        form.instance.finding = self.finding
+        form.instance.uploaded_by = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('threatmodels:detail', kwargs={'slug': self.threat_model.slug})
