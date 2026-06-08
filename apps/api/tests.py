@@ -11,7 +11,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.organization.models import BusinessUnit
-from apps.threatmodels.models import ThreatModel
+from apps.mitre.models import Tactic, Technique
+from apps.threatmodels.models import Finding, TechnologyTag, ThreatModel
 from .models import APISubmission, InternalAPIClient
 
 
@@ -277,3 +278,158 @@ class EntraJWTAuthenticationTests(TestCase):
             response = self.get_with_token(self.token(appid='unknown-app', oid='unknown-object'))
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class InternalAPIReadbackTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username='service-account', password='pass12345')
+        cls.parent_bu = BusinessUnit.objects.create(name='Payments', slug='payments')
+        cls.child_bu = BusinessUnit.objects.create(name='Payment APIs', slug='payment-apis', parent=cls.parent_bu)
+        cls.other_bu = BusinessUnit.objects.create(name='Lending', slug='lending')
+        cls.tag = TechnologyTag.objects.create(name='API', slug='api')
+        cls.tactic = Tactic.objects.create(
+            tactic_id='TA0001',
+            name='Initial Access',
+            description='Initial access tactic.',
+            framework='attack',
+            url='https://attack.mitre.org/tactics/TA0001/',
+        )
+        cls.technique = Technique.objects.create(
+            technique_id='T1190',
+            name='Exploit Public-Facing Application',
+            description='Exploit technique.',
+            framework='attack',
+            tactic=cls.tactic,
+            url='https://attack.mitre.org/techniques/T1190/',
+        )
+        cls.threat_model = ThreatModel.objects.create(
+            external_id='service-catalog:payments-api',
+            source_system='service-catalog',
+            title='Payments API',
+            slug='payments-api',
+            business_unit=cls.child_bu,
+            description='Payments API threat model.',
+            overall_risk=4,
+            owner=cls.user,
+        )
+        cls.threat_model.tags.add(cls.tag)
+        cls.finding = Finding.objects.create(
+            threat_model=cls.threat_model,
+            external_id='authz-001',
+            threat_id='PAY-001',
+            scenario='Broken authorization.',
+            threat_object='Payments API',
+            mitre_technique=cls.technique,
+            stride_category='E',
+            inherent_risk=4,
+            owner='AppSec',
+            status='open',
+        )
+        cls.other_threat_model = ThreatModel.objects.create(
+            title='Lending API',
+            slug='lending-api',
+            business_unit=cls.other_bu,
+            description='Lending API threat model.',
+            owner=cls.user,
+        )
+
+    def setUp(self):
+        self.client = APIClient()
+        self.private_key, self.public_key = rsa_key_pair()
+        self.api_client = InternalAPIClient.objects.create(
+            name='Service Catalog',
+            entra_app_id='app-123',
+            entra_object_id='object-123',
+            user=self.user,
+            business_unit_scope=self.parent_bu,
+        )
+
+    def token(self, **overrides):
+        now = timezone.now()
+        claims = {
+            'iss': 'https://login.microsoftonline.com/tenant-123/v2.0',
+            'aud': 'api://threatmodel',
+            'tid': 'tenant-123',
+            'appid': 'app-123',
+            'oid': 'object-123',
+            'roles': ['ThreatModel.Read'],
+            'iat': int(now.timestamp()),
+            'nbf': int(now.timestamp()),
+            'exp': int((now + timedelta(minutes=10)).timestamp()),
+        }
+        claims.update(overrides)
+        return jwt.encode(claims, self.private_key, algorithm='RS256')
+
+    def auth_settings(self):
+        return override_settings(
+            ENTRA_TENANT_ID='tenant-123',
+            ENTRA_ISSUER='https://login.microsoftonline.com/tenant-123/v2.0',
+            ENTRA_AUDIENCE='api://threatmodel',
+            ENTRA_REQUIRED_ROLES=['ThreatModel.Submit', 'ThreatModel.Read', 'ThreatModel.Admin'],
+            ENTRA_TEST_PUBLIC_KEY=self.public_key,
+        )
+
+    def authorize(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token()}')
+
+    def test_reference_endpoint_returns_filtered_lookup_values(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.get(reverse('api:reference'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertIn({'value': 4, 'label': 'High'}, data['risk'])
+        self.assertIn('draft', data['threat_model_statuses'])
+        self.assertIn('open', data['finding_statuses'])
+        self.assertIn('E', data['stride_categories'])
+        self.assertEqual(
+            data['business_units'],
+            [
+                {'slug': 'payments', 'name': 'Payments'},
+                {'slug': 'payment-apis', 'name': 'Payment APIs'},
+            ],
+        )
+        self.assertEqual(data['tags'], ['API'])
+        self.assertEqual(data['mitre_techniques'][0]['technique_id'], 'T1190')
+
+    def test_threat_model_readback_returns_normalized_data(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.get(
+                reverse('api:threat-model-detail', kwargs={'slug': self.threat_model.slug})
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data['external_id'], 'service-catalog:payments-api')
+        self.assertEqual(data['source_system'], 'service-catalog')
+        self.assertEqual(data['business_unit'], 'payment-apis')
+        self.assertEqual(data['computed_risk'], 4)
+        self.assertEqual(data['tags'], ['API'])
+        self.assertEqual(data['findings'][0]['external_id'], 'authz-001')
+        self.assertEqual(data['findings'][0]['mitre_technique'], 'T1190')
+        self.assertTrue(data['html_url'].endswith('/threatmodels/payments-api/'))
+
+    def test_out_of_scope_threat_model_readback_is_rejected(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.get(
+                reverse('api:threat-model-detail', kwargs={'slug': self.other_threat_model.slug})
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unknown_threat_model_readback_returns_not_found(self):
+        self.authorize()
+
+        with self.auth_settings():
+            response = self.client.get(
+                reverse('api:threat-model-detail', kwargs={'slug': 'missing'})
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

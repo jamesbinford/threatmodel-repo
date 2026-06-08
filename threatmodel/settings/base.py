@@ -120,4 +120,4 @@ ENTRA_TENANT_ID = ''
 ENTRA_ISSUER = ''
 ENTRA_AUDIENCE = ''
 ENTRA_JWKS_URL = ''
-ENTRA_REQUIRED_ROLES = ['ThreatModel.Submit', 'ThreatModel.Admin']
+ENTRA_REQUIRED_ROLES = ['ThreatModel.Submit', 'ThreatModel.Read', 'ThreatModel.Admin']

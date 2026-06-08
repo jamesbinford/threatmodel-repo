@@ -91,7 +91,7 @@ ENTRA_JWKS_URL = os.environ.get('ENTRA_JWKS_URL') or (
 )
 ENTRA_REQUIRED_ROLES = [
     role.strip()
-    for role in os.environ.get('ENTRA_REQUIRED_ROLES', 'ThreatModel.Submit,ThreatModel.Admin').split(',')
+    for role in os.environ.get('ENTRA_REQUIRED_ROLES', 'ThreatModel.Submit,ThreatModel.Read,ThreatModel.Admin').split(',')
     if role.strip()
 ]
 
